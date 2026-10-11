@@ -39,38 +39,23 @@ const dateLabel = (value) => new Intl.DateTimeFormat('pl-PL', {
 }).format(new Date(value));
 
 function AuthDialog({ onClose, onSignedIn }) {
-  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const submit = async (event) => {
     event.preventDefault();
     setError('');
-    setMessage('');
     if (!supabase) {
-      setError('Najpierw podłącz projekt Supabase. Instrukcja konfiguracji znajduje się w README.');
+      setError('Logowanie administratora wymaga konfiguracji Supabase.');
       return;
     }
     setBusy(true);
     try {
-      if (mode === 'signup') {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { display_name: name.trim() } },
-        });
-        if (authError) throw authError;
-        if (data.session) onSignedIn();
-        else setMessage('Konto utworzone. Sprawdź skrzynkę, aby potwierdzić adres e-mail.');
-      } else {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-        if (authError) throw authError;
-        onSignedIn();
-      }
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
+      onSignedIn();
     } catch (authError) {
       setError(authError.message || 'Nie udało się zalogować.');
     } finally {
@@ -83,27 +68,22 @@ function AuthDialog({ onClose, onSignedIn }) {
       <section className="dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="icon-button dialog-close" onClick={onClose} aria-label="Zamknij"><X size={18} /></button>
         <div className="dialog-mark"><KeyRound size={19} /></div>
-        <span className="eyebrow">Twoje miejsce do nauki</span>
-        <h2 id="auth-title">{mode === 'login' ? 'Miło cię widzieć.' : 'Dołącz do pracowni.'}</h2>
-        <p className="dialog-copy">{mode === 'login' ? 'Zaloguj się, żeby zobaczyć wspólne notatki.' : 'Załóż konto i dodawaj notatki dla całej grupy.'}</p>
+        <span className="eyebrow">DOSTĘP ADMINISTRATORA</span>
+        <h2 id="auth-title">Panel administratora</h2>
+        <p className="dialog-copy">Logowanie jest potrzebne tylko do usuwania wpisów. Notatki możesz przeglądać i dodawać bez konta.</p>
         {!hasSupabaseConfig ? (
           <div className="inline-message"><AlertCircle size={17} /><span>Tryb podglądu działa lokalnie. Logowanie włączysz po konfiguracji Supabase opisanej w README.</span></div>
         ) : (
           <form className="form-stack" onSubmit={submit}>
-            {mode === 'signup' && <label>Jak mamy cię nazywać?<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Imię lub pseudonim" maxLength={60} /></label>}
             <label>Adres e-mail<input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ty@szkola.pl" /></label>
-            <label>Hasło<input required type="password" minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Co najmniej 6 znaków" /></label>
+            <label>Hasło<input required type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Hasło administratora" /></label>
             {error && <p className="form-error">{error}</p>}
-            {message && <p className="form-success">{message}</p>}
             <button className="button button-primary full-button" disabled={busy}>
               {busy ? <LoaderCircle className="spin" size={17} /> : <ArrowRight size={17} />}
-              {mode === 'login' ? 'Zaloguj się' : 'Utwórz konto'}
+              Zaloguj się
             </button>
           </form>
         )}
-        <button className="text-button auth-switch" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }}>
-          {mode === 'login' ? 'Nie masz konta? Utwórz je' : 'Masz już konto? Zaloguj się'}
-        </button>
       </section>
     </div>
   );
@@ -119,6 +99,7 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
         </div>
         <form className="form-stack" onSubmit={onSave}>
           <label>Tytuł<input required autoFocus maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Na przykład: Rodzaje połączeń lutowanych" /></label>
+          <label>Podpis (opcjonalnie)<input maxLength={60} value={draft.author_name} onChange={(event) => setDraft({ ...draft, author_name: event.target.value })} placeholder="Na przykład: Kacper" /></label>
           <label>Przedmiot<input list="subjects" maxLength={60} value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} placeholder="Wpisz przedmiot" /><datalist id="subjects"><option>Elektrotechnika</option><option>Sieci komputerowe</option><option>Podstawy konstrukcji maszyn</option><option>Programowanie</option></datalist></label>
           <label>Treść<textarea required rows={8} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Zapisz to, co warto zapamiętać..." /></label>
           <label className={`file-picker ${!canUpload ? 'file-picker-disabled' : ''}`}>
@@ -297,12 +278,13 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return undefined;
-    if (!user) { setNotes([]); setIsAdmin(false); setLoading(false); return undefined; }
     let active = true;
     setLoading(true);
     Promise.all([
       supabase.from('notes').select('*').order('created_at', { ascending: false }),
-      supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle(),
+      user
+        ? supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]).then(([notesResult, adminResult]) => {
       if (!active) return;
       if (notesResult.error) setNotice(`Nie udało się pobrać notatek: ${notesResult.error.message}`);
@@ -332,7 +314,7 @@ export default function App() {
   }, []);
 
   const openComposer = (content = '') => {
-    setDraft({ title: '', subject: '', content, files: [] });
+    setDraft({ title: '', subject: '', content, author_name: '', files: [] });
     setComposerOpen(true);
   };
 
@@ -344,7 +326,7 @@ export default function App() {
       if (supabase && draft.files.length) {
         for (const file of draft.files) {
           const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const filePath = `${user.id}/${crypto.randomUUID()}-${safeName}`;
+          const filePath = `shared/${crypto.randomUUID()}-${safeName}`;
           const { error: uploadError } = await supabase.storage.from('note-files').upload(filePath, file, { contentType: file.type || 'application/octet-stream' });
           if (uploadError) throw uploadError;
           attachments.push({ name: file.name, path: filePath, size: file.size, type: file.type });
@@ -352,11 +334,10 @@ export default function App() {
       }
       const payload = {
         title: draft.title.trim(), subject: draft.subject.trim() || 'Ogólne', content: draft.content.trim(), attachments,
-        author_name: user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Lokalnie',
+        author_name: draft.author_name.trim() || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Gość',
       };
       if (supabase) {
-        if (!user) throw new Error('Zaloguj się, aby dodać wspólną notatkę.');
-        const { data, error: insertError } = await supabase.from('notes').insert({ ...payload, author_id: user.id }).select().single();
+        const { data, error: insertError } = await supabase.from('notes').insert({ ...payload, author_id: user?.id || null }).select().single();
         if (insertError) throw insertError;
         setNotes((current) => [data, ...current]);
       } else {
@@ -371,7 +352,7 @@ export default function App() {
     }
   };
 
-  const canDelete = (note) => !supabase || isAdmin || note.author_id === user?.id;
+  const canDelete = () => !supabase || isAdmin;
 
   const deleteNote = async (note) => {
     if (!window.confirm(`Usunąć notatkę „${note.title}”?`)) return;
@@ -412,12 +393,12 @@ export default function App() {
         <nav aria-label="Nawigacja główna">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-link ${page === id ? 'nav-active' : ''}`} onClick={() => { setPage(id); setMobileNavOpen(false); }}><Icon size={18} /><span>{label}</span>{id === 'notes' && <span className="nav-count">{notes.length}</span>}</button>)}</nav>
         <div className="sidebar-bottom"><div className="side-rule" /><div className="workspace-label"><span className="workspace-dot" /><div><strong>{hasSupabaseConfig ? 'Tablica grupy' : 'Lokalny podgląd'}</strong><small>{hasSupabaseConfig ? 'wspólna przestrzeń' : 'dane na tym urządzeniu'}</small></div><MoreHorizontal size={17} /></div>
           {isAdmin && <div className="admin-tag"><ShieldCheck size={14} />Administrator</div>}
-          {user ? <button className="account-button" onClick={signOut}><span className="user-avatar">{(user.user_metadata?.display_name || user.email || 'U').slice(0, 1).toUpperCase()}</span><span className="account-copy"><strong>{user.user_metadata?.display_name || user.email?.split('@')[0]}</strong><small>{user.email}</small></span><LogOut size={16} /></button> : <button className="account-button" onClick={() => setAuthOpen(true)}><span className="user-avatar guest-avatar"><LogIn size={15} /></span><span className="account-copy"><strong>Zaloguj się</strong><small>{hasSupabaseConfig ? 'do wspólnej tablicy' : 'funkcje współdzielone'}</small></span><ArrowRight size={15} /></button>}
+          {user ? <button className="account-button" onClick={signOut}><span className="user-avatar">{(user.user_metadata?.display_name || user.email || 'U').slice(0, 1).toUpperCase()}</span><span className="account-copy"><strong>{user.user_metadata?.display_name || 'Administrator'}</strong><small>{user.email}</small></span><LogOut size={16} /></button> : <button className="account-button" onClick={() => setAuthOpen(true)}><span className="user-avatar guest-avatar"><LogIn size={15} /></span><span className="account-copy"><strong>Panel admina</strong><small>logowanie tylko do moderacji</small></span><ArrowRight size={15} /></button>}
         </div>
       </aside>
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Zamknij menu" onClick={() => setMobileNavOpen(false)} />}
       <main className="main-area">
-        <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Pracownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig && user ? 'sync-live' : ''}`}><span />{hasSupabaseConfig && user ? 'Synchronizacja aktywna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}>Dołącz do grupy <ArrowRight size={15} /></button>}</div></header>
+        <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Pracownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
         <div className="content-wrap">
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
           {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={() => openComposer()} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
@@ -427,7 +408,7 @@ export default function App() {
         </div>
       </main>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSignedIn={() => setAuthOpen(false)} />}
-      {composerOpen && <NoteDialog draft={draft} setDraft={setDraft} onClose={() => setComposerOpen(false)} onSave={saveNote} saving={saving} canUpload={Boolean(supabase && user)} />}
+      {composerOpen && <NoteDialog draft={draft} setDraft={setDraft} onClose={() => setComposerOpen(false)} onSave={saveNote} saving={saving} canUpload={Boolean(supabase)} />}
       {notice && <div className="toast" role="status"><Check size={17} />{notice}<button aria-label="Zamknij komunikat" onClick={() => setNotice('')}><X size={15} /></button></div>}
     </div>
   );

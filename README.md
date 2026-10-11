@@ -1,6 +1,6 @@
 # Pracownia — wspólne notatki zawodowe
 
-Lekka aplikacja dla grupy uczącej się zawodu. Wszyscy mogą dodawać notatki, a autorzy i administrator mogą usuwać wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
+Lekka aplikacja dla grupy uczącej się zawodu. Każdy może przeglądać i dodawać notatki bez konta. Tylko administrator loguje się, aby usuwać wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
 
 ## Uruchomienie lokalne
 
@@ -15,10 +15,10 @@ Bez `.env` działa lokalny podgląd z przykładowymi notatkami. Są one zapisywa
 
 1. Utwórz projekt w Supabase i skopiuj URL projektu oraz klucz `anon`/publishable do `.env` jako `VITE_SUPABASE_URL` i `VITE_SUPABASE_ANON_KEY`.
 2. W panelu Supabase otwórz SQL Editor i wykonaj cały plik `supabase/schema.sql`.
-3. Uruchom aplikację ponownie, załóż konto i potwierdź adres e-mail, jeśli projekt wymaga potwierdzenia.
-4. Aby nadać sobie uprawnienia administratora, w SQL Editor wykonaj zapytanie z końca pliku `supabase/schema.sql`, podając e-mail konta. Samodzielna zmiana uprawnień administratora przez użytkowników jest zablokowana.
+3. W Supabase otwórz Authentication → Users → Add user i utwórz swoje konto administratora.
+4. W SQL Editor wykonaj zapytanie z końca pliku `supabase/schema.sql`, wpisując e-mail tego konta. Rejestracja publiczna nie jest potrzebna.
 
-W Supabase ustaw poprawny adres aplikacji w Authentication → URL Configuration. Prywatny bucket `note-files` ogranicza pliki do 20 MB. Załączniki są dostępne dla zalogowanych członków grupy.
+W Supabase ustaw adres aplikacji w Authentication → URL Configuration. Bucket `note-files` ogranicza pliki do 20 MB. Wspólna tablica i załączniki są publicznie dostępne; każdy może dodawać treści i pliki, ale tylko administrator może je usuwać. Udostępniaj adres z rozwagą, bo publiczny dostęp może przyciągać spam.
 
 ## Generator kodu
 
