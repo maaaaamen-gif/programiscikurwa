@@ -26,6 +26,8 @@ Utwórz klucz w Google AI Studio i ustaw `GEMINI_API_KEY` w `.env`, a następnie
 
 ## Wdrożenie na Render
 
-Plik `render.yaml` opisuje pojedynczą usługę Node, która serwuje aplikację i API. Po połączeniu repozytorium z Render dodaj wartości `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` oraz `GEMINI_API_KEY` w ustawieniach usługi i wdroż ją ponownie. W Supabase dopisz adres Render do dozwolonych adresów logowania.
+Plik `render.yaml` opisuje pojedynczą usługę Node, która serwuje aplikację i API. Nazwa usługi w tym pliku to `szpontownia`; Render używa jej przy tworzeniu usługi i przypisywaniu domyślnej subdomeny `onrender.com`. Docelowy adres strony to `https://szpontownia.onrender.com/`. Po połączeniu repozytorium z Render dodaj wartości `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` oraz `GEMINI_API_KEY` w ustawieniach usługi i wdroż ją ponownie. Dla już istniejącej usługi sprawdź adres w Settings → Custom Domains — zmiana `render.yaml` sama nie gwarantuje zmiany już przypisanej subdomeny.
+
+W Supabase otwórz Authentication → URL Configuration, ustaw Site URL na `https://szpontownia.onrender.com` i dodaj `https://szpontownia.onrender.com/**` do Redirect URLs. Aplikacja korzysta z API pod ścieżkami względnymi (`/api/...`), więc nie wymaga osobnego adresu API ani zmiany CORS przy zmianie domeny.
 
 Plan bezpłatny Render może usypiać usługę po okresie bez ruchu, więc pierwsze otwarcie po przerwie może chwilę potrwać. Limity darmowej bazy, storage i API zależą od aktualnych planów dostawców; OCR działa na urządzeniu użytkownika.
