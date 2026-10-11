@@ -1,4 +1,4 @@
-# Pracownia — wspólne notatki zawodowe
+# Szpontownia — wspólne notatki zawodowe
 
 Lekka aplikacja dla grupy uczącej się zawodu. Każdy może przeglądać i dodawać notatki bez konta. Tylko administrator loguje się, aby usuwać wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
 

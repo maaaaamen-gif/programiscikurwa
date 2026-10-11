@@ -61,4 +61,4 @@ if (existsSync(buildDirectory)) {
   app.get('*', (_request, response) => response.sendFile(path.join(buildDirectory, 'index.html')));
 }
 
-app.listen(port, () => console.log(`Pracownia działa na porcie ${port}`));
+app.listen(port, () => console.log(`Szpontownia działa na porcie ${port}`));

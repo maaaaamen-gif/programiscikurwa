@@ -27,7 +27,7 @@ const demoNotes = [
 
 const readLocalNotes = () => {
   try {
-    const stored = localStorage.getItem('pracownia-notes');
+    const stored = localStorage.getItem('szpontownia-notes') ?? localStorage.getItem('pracownia-notes');
     return stored ? JSON.parse(stored) : demoNotes;
   } catch {
     return demoNotes;
@@ -272,7 +272,7 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) {
-      localStorage.setItem('pracownia-notes', JSON.stringify(notes));
+      localStorage.setItem('szpontownia-notes', JSON.stringify(notes));
     }
   }, [notes]);
 
@@ -388,7 +388,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
-        <button className="brand" onClick={() => { setPage('notes'); setMobileNavOpen(false); }}><span className="brand-mark"><BookOpen size={20} /></span><span>pracownia<span className="brand-dot">.</span><small>NOTATKI ZAWODOWE</small></span></button>
+        <button className="brand" onClick={() => { setPage('notes'); setMobileNavOpen(false); }}><span className="brand-mark"><BookOpen size={20} /></span><span>szpontownia<span className="brand-dot">.</span><small>NOTATKI ZAWODOWE</small></span></button>
         <div className="side-label">TWOJE MIEJSCE</div>
         <nav aria-label="Nawigacja główna">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-link ${page === id ? 'nav-active' : ''}`} onClick={() => { setPage(id); setMobileNavOpen(false); }}><Icon size={18} /><span>{label}</span>{id === 'notes' && <span className="nav-count">{notes.length}</span>}</button>)}</nav>
         <div className="sidebar-bottom"><div className="side-rule" /><div className="workspace-label"><span className="workspace-dot" /><div><strong>{hasSupabaseConfig ? 'Tablica grupy' : 'Lokalny podgląd'}</strong><small>{hasSupabaseConfig ? 'wspólna przestrzeń' : 'dane na tym urządzeniu'}</small></div><MoreHorizontal size={17} /></div>
@@ -398,13 +398,13 @@ export default function App() {
       </aside>
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Zamknij menu" onClick={() => setMobileNavOpen(false)} />}
       <main className="main-area">
-        <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Pracownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
+        <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Szpontownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
         <div className="content-wrap">
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
           {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={() => openComposer()} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
           {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
-          <footer className="app-footer"><span>Pracownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
+          <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
         </div>
       </main>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSignedIn={() => setAuthOpen(false)} />}
