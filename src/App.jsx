@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { cleanOcrPage } from './lib/ocr.js';
 import { hasSupabaseConfig, supabase } from './lib/supabase.js';
+import easterEggImage from './image.png';
+import easterEggGif from './krzys.gif';
 
 const NOTE_FOLDERS = [
   { id: 'database', label: 'Bazy danych', subject: 'Bazy danych', icon: Database },
@@ -14,8 +16,8 @@ const NOTE_FOLDERS = [
 ];
 
 const easterEggPhotos = [
-  { href: 'image.png', alt: 'Easter Egg Photo 1' },
-  { href: 'krzys.gif', alt: 'Easter Egg Photo 2' },
+  { href: easterEggImage, alt: 'Easter Egg Photo 1' },
+  { href: easterEggGif, alt: 'Easter Egg Photo 2' },
 ];
 
 const demoNotes = [
@@ -877,7 +879,7 @@ export default function App() {
       {easterEggPhoto && <div className="easter-egg-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setEasterEggPhoto(null); }}>
         <div className="easter-egg-dialog" role="dialog" aria-modal="true" aria-label="Niespodzianka">
           <button className="icon-button easter-egg-close" aria-label="Zamknij niespodziankę" onClick={() => setEasterEggPhoto(null)}><X size={18} /></button>
-          <img src={easterEggPhoto} alt="Losowe zdjęcie-niespodzianka" />
+          <img src={easterEggPhoto.href} alt={easterEggPhoto.alt} />
           <p>co to tu kurwa robi!</p>
         </div>
       </div>}
