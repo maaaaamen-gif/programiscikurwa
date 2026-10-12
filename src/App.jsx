@@ -128,7 +128,7 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
           <label>Folder<select value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })}>{NOTE_FOLDERS.map((folder) => <option key={folder.id} value={folder.subject}>{folder.label}</option>)}</select></label>
           <label>Kod lub treść<textarea required rows={12} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Wklej kod lub wpisz treść notatki..." /></label>
           <label className={`file-picker ${!canUpload ? 'file-picker-disabled' : ''}`}>
-            <Upload size={17} /><span><strong>Dołącz pliki</strong><small>{canUpload ? 'Zdjęcia, PDF i dokumenty do 20 MB' : 'Dostępne po podłączeniu bazy danych'}</small></span>
+            <Upload size={17} /><span><strong>Dołącz pliki</strong><small>{canUpload ? 'Dowolny typ pliku do 20 MB' : 'Dostępne po podłączeniu bazy danych'}</small></span>
             <input type="file" multiple disabled={!canUpload} onChange={(event) => setDraft({ ...draft, files: [...draft.files, ...Array.from(event.target.files || [])] })} />
           </label>
           {draft.files.length > 0 && <div className="selected-files">{draft.files.map((file, index) => <span className="selected-file" key={`${file.name}-${index}`}><FileText size={14} />{file.name}<button type="button" aria-label={`Usuń ${file.name}`} onClick={() => setDraft({ ...draft, files: draft.files.filter((_, fileIndex) => fileIndex !== index) })}><X size={13} /></button></span>)}</div>}
@@ -391,19 +391,36 @@ function CodePage({ onUseCode }) {
     setAttachmentError('');
     if (!file) return;
     setAttachment(null);
-    if (!/\.(sql|txt|csv|json|xml|md|ya?ml)$/i.test(file.name)) {
-      setAttachmentError('Dołącz plik tekstowy, np. eksport .sql, .csv lub .json.');
-      return;
-    }
-    if (file.size > 750 * 1024) {
-      setAttachmentError('Plik nie może przekraczać 750 KB.');
-      return;
-    }
     setReadingAttachment(true);
     try {
-      const content = await file.text();
-      if (!content.trim()) throw new Error('Plik jest pusty.');
-      setAttachment({ name: file.name, content });
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      const binaryMimeType = file.type === 'application/pdf' || extension === 'pdf'
+        ? 'application/pdf'
+        : file.type.startsWith('image/')
+          ? file.type
+          : ({
+            bmp: 'image/bmp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
+            jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', tif: 'image/tiff',
+            tiff: 'image/tiff', webp: 'image/webp',
+          })[extension];
+
+      if (binaryMimeType) {
+        if (file.size > 10 * 1024 * 1024) throw new Error('Obraz lub PDF nie może przekraczać 10 MB.');
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Nie udało się odczytać załącznika.'));
+          reader.readAsDataURL(file);
+        });
+        const contentBase64 = String(dataUrl).split(',')[1];
+        if (!contentBase64) throw new Error('Nie udało się odczytać załącznika.');
+        setAttachment({ name: file.name, kind: 'binary', mimeType: binaryMimeType, contentBase64 });
+      } else {
+        if (file.size > 750 * 1024) throw new Error('Plik tekstowy nie może przekraczać 750 KB.');
+        const content = await file.text();
+        if (!content.trim()) throw new Error('Plik jest pusty.');
+        setAttachment({ name: file.name, kind: 'text', content });
+      }
     } catch (fileError) {
       setAttachmentError(fileError.message || 'Nie udało się odczytać pliku.');
       setAttachment(null);
@@ -457,10 +474,10 @@ function CodePage({ onUseCode }) {
         <div className="generator-context">
           <span>Plik referencyjny (opcjonalnie)</span>
           <div className="generator-file-row">
-            <label className="generator-file-picker"><Upload size={15} />{readingAttachment ? 'Odczytuję plik...' : attachment?.name || 'Wybierz plik'}<input type="file" accept=".sql,.txt,.csv,.json,.xml,.md,.yaml,.yml" disabled={busy || readingAttachment} onChange={(event) => { readAttachment(event.target.files?.[0]); event.target.value = ''; }} /></label>
+            <label className="generator-file-picker"><Upload size={15} />{readingAttachment ? 'Odczytuję plik...' : attachment?.name || 'Wybierz plik'}<input type="file" disabled={busy || readingAttachment} onChange={(event) => { readAttachment(event.target.files?.[0]); event.target.value = ''; }} /></label>
             {attachment && <button type="button" className="icon-button" aria-label="Usuń załącznik" title="Usuń załącznik" onClick={() => { setAttachment(null); setAttachmentError(''); }}><X size={16} /></button>}
           </div>
-          <small>Pliki tekstowe do 750 KB, np. eksport bazy .sql. Zawartość zostanie wysłana do Gemini jako kontekst.</small>
+          <small>Dowolny plik: tekst do 750 KB, obrazy i PDF do 10 MB. Obrazy i PDF trafiają do Gemini w oryginalnej postaci, pozostałe pliki jako tekst.</small>
         </div>
         {attachmentError && <p className="form-error"><AlertCircle size={15} />{attachmentError}</p>}
         <div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy || readingAttachment}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>

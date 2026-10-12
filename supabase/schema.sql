@@ -72,7 +72,7 @@ values (
   'note-files',
   false,
   20971520,
-  array['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/plain', 'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  null
 )
 on conflict (id) do update set
   public = excluded.public,
