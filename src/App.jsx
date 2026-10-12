@@ -72,6 +72,7 @@ function AuthDialog({ onClose, onSignedIn }) {
         <span className="eyebrow">DOSTĘP ADMINISTRATORA</span>
         <h2 id="auth-title">Panel administratora</h2>
         <p className="dialog-copy">Logowanie jest potrzebne tylko do usuwania wpisów. Notatki możesz przeglądać i dodawać bez konta.</p>
+        <p className="dialog-copy">WŁASNOŚĆ SZEREGOWY LEONIDAS</p>
         {!hasSupabaseConfig ? (
           <div className="inline-message"><AlertCircle size={17} /><span>Tryb podglądu działa lokalnie. Logowanie włączysz po konfiguracji Supabase opisanej w README.</span></div>
         ) : (
