@@ -22,7 +22,7 @@ W Supabase ustaw adres aplikacji w Authentication → URL Configuration. Bucket 
 
 ## Generator kodu
 
-Utwórz klucz w Google AI Studio i ustaw `GEMINI_API_KEY` w `.env`, a następnie uruchom serwer przez `npm run server`. Klucz pozostaje po stronie serwera. Bez niego generator pokaże status konfiguracji i nie wyśle żądania do modelu. Darmowe limity Gemini mogą się zmieniać.
+Utwórz klucz w Google AI Studio i ustaw `GEMINI_API_KEY` w `.env`, a następnie uruchom serwer przez `npm run server`. Klucz pozostaje po stronie serwera. Generator kodu oraz filtrowanie tekstu OCR przez Gemini korzystają z tego klucza. OCR rozpoznaje zdjęcie lokalnie, ale jego tekst jest wysyłany do Gemini do filtrowania; gdy klucz lub usługa są niedostępne, aplikacja zachowuje surowy wynik OCR do ręcznej edycji. Darmowe limity Gemini mogą się zmieniać.
 
 ## Wdrożenie na Render
 

@@ -5,6 +5,7 @@ import {
   LogOut, Menu, MoreHorizontal, Plus, ScanText, Search, ShieldCheck, Sparkles,
   Trash2, Upload, X,
 } from 'lucide-react';
+import { cleanOcrPage } from './lib/ocr.js';
 import { hasSupabaseConfig, supabase } from './lib/supabase.js';
 
 const demoNotes = [
@@ -153,6 +154,8 @@ function OcrPage({ onUseText }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
+  const [filterNotice, setFilterNotice] = useState('');
+  const [ignoredChrome, setIgnoredChrome] = useState([]);
 
   useEffect(() => {
     if (!image) { setPreview(''); return undefined; }
@@ -165,6 +168,8 @@ function OcrPage({ onUseText }) {
     if (!file) return;
     setImage(file);
     setText('');
+    setFilterNotice('');
+    setIgnoredChrome([]);
     setError('');
     setProgress('Pobieram polski model rozpoznawania...');
     setBusy(true);
@@ -173,8 +178,33 @@ function OcrPage({ onUseText }) {
       const { createWorker } = await import('tesseract.js');
       worker = await createWorker('pol', 1, { logger: (event) => event.status === 'recognizing text' && setProgress(`Rozpoznaję tekst: ${Math.round(event.progress * 100)}%`) });
       const result = await worker.recognize(file);
-      setText(result.data.text.trim());
-      setProgress('Gotowe. Sprawdź tekst przed zapisaniem.');
+      const bitmap = await createImageBitmap(file);
+      const cleaned = cleanOcrPage(result.data, bitmap.height);
+      bitmap.close();
+      setText(cleaned.text);
+      setIgnoredChrome(cleaned.ignoredChrome);
+      if (cleaned.text) {
+        setProgress('Sprawdzam rozpoznany tekst przez Gemini...');
+        try {
+          const response = await fetch('/api/filter-ocr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: cleaned.text }),
+          });
+          const filteredResult = await response.json();
+          if (!response.ok) throw new Error(filteredResult.error || 'Filtrowanie przez Gemini jest niedostępne.');
+          if (typeof filteredResult.text !== 'string' || !filteredResult.text.trim()) {
+            throw new Error('Gemini zwróciło pusty tekst. Możesz użyć surowego wyniku OCR.');
+          }
+          setText(filteredResult.text.trim());
+          setProgress('Gotowe. Sprawdź tekst przed zapisaniem.');
+        } catch (filterError) {
+          setFilterNotice(filterError.message || 'Filtrowanie przez Gemini jest niedostępne. Pokazuję surowy wynik OCR.');
+          setProgress('Pokazuję surowy wynik OCR. Sprawdź go przed zapisaniem.');
+        }
+      } else {
+        setProgress('Nie udało się rozpoznać tekstu na zdjęciu.');
+      }
     } catch {
       setError('Nie udało się odczytać zdjęcia. Spróbuj z wyraźniejszym obrazem.');
       setProgress('');
@@ -186,14 +216,16 @@ function OcrPage({ onUseText }) {
 
   return (
     <>
-      <section className="tool-heading"><span className="eyebrow">CZYTANIE ZE ZDJĘĆ</span><h1>Zdjęcie wchodzi.<br /><span>Tekst wychodzi.</span></h1><p>Odczytaj polskie notatki ze zdjęcia. Cała analiza odbywa się w twojej przeglądarce.</p></section>
+      <section className="tool-heading"><span className="eyebrow">CZYTANIE ZE ZDJĘĆ</span><h1>Zdjęcie wchodzi.<br /><span>Tekst wychodzi.</span></h1><p>OCR odczytuje tekst w przeglądarce, a Gemini pomaga pominąć elementy interfejsu. Wynik możesz poprawić przed zapisaniem.</p></section>
       <section className="ocr-workspace">
         <div className="ocr-left"><label className={`upload-zone ${preview ? 'has-preview' : ''}`}>
           {preview ? <img src={preview} alt="Wybrane zdjęcie do odczytu" /> : <><span className="upload-icon"><ScanText size={24} /></span><strong>Wybierz zdjęcie notatek</strong><span>JPG, PNG lub WEBP</span><span className="button button-quiet"><Upload size={16} />Wybierz plik</span></>}
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readImage(event.target.files?.[0])} />
-        </label><p className="privacy-note"><ShieldCheck size={15} />Zdjęcie nie opuszcza twojego urządzenia.</p></div>
+        </label><p className="privacy-note"><ShieldCheck size={15} />Zdjęcie zostaje na urządzeniu; rozpoznany tekst jest wysyłany do Gemini w celu filtrowania.</p></div>
         <div className="ocr-result"><div className="result-heading"><div><span className="eyebrow">WYNIK OCR</span><h2>Rozpoznany tekst</h2></div>{text && <button className="icon-button" title="Kopiuj tekst" aria-label="Kopiuj tekst" onClick={() => navigator.clipboard.writeText(text)}><FileText size={17} /></button>}</div>
           {busy ? <div className="ocr-progress"><LoaderCircle size={19} className="spin" /><span>{progress}</span></div> : error ? <p className="form-error">{error}</p> : <textarea aria-label="Rozpoznany tekst, możesz go edytować" value={text} onChange={(event) => setText(event.target.value)} placeholder="Rozpoznany tekst pojawi się tutaj. Możesz go poprawić przed zapisaniem." />}
+          {!busy && filterNotice && <p className="form-error">{filterNotice}</p>}
+          {!busy && ignoredChrome.length > 0 && <p className="progress-caption"><Check size={14} />Pominięto nazwę programu: {ignoredChrome.join(', ')}</p>}
           {!busy && progress && !error && <p className="progress-caption"><Check size={14} />{progress}</p>}
           <div className="result-actions"><button className="button button-primary" disabled={!text || busy} onClick={() => onUseText(text)}><Plus size={16} />Zapisz jako notatkę</button></div>
         </div>
