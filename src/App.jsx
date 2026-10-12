@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronDown, Database,
   Code2, Copy, Download, FileImage, FileText, FolderOpen, KeyRound, LoaderCircle, LogIn,
@@ -11,6 +11,11 @@ import { hasSupabaseConfig, supabase } from './lib/supabase.js';
 const NOTE_FOLDERS = [
   { id: 'database', label: 'Bazy danych', subject: 'Bazy danych', icon: Database },
   { id: 'websites', label: 'Aplikacje / strony internetowe', subject: 'Aplikacje / strony internetowe', icon: Code2 },
+];
+
+const easterEggPhotos = [
+  'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=85',
 ];
 
 const demoNotes = [
@@ -513,6 +518,9 @@ export default function App() {
   const [draft, setDraft] = useState({ title: '', content: '', subject: NOTE_FOLDERS[1].subject, files: [] });
   const [notice, setNotice] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const brandClickCount = useRef(0);
+  const easterEggTimeout = useRef(null);
+  const [easterEggPhoto, setEasterEggPhoto] = useState(null);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -551,6 +559,31 @@ export default function App() {
     const timer = window.setTimeout(() => setNotice(''), 5200);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (!easterEggPhoto) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setEasterEggPhoto(null);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [easterEggPhoto]);
+
+  useEffect(() => () => window.clearTimeout(easterEggTimeout.current), []);
+
+  const handleBrandClick = (event) => {
+    if (event.target instanceof Element && event.target.closest('.brand-mark')) {
+      brandClickCount.current += 1;
+      if (brandClickCount.current === 5) {
+        brandClickCount.current = 0;
+        setEasterEggPhoto(easterEggPhotos[Math.floor(Math.random() * easterEggPhotos.length)]);
+        window.clearTimeout(easterEggTimeout.current);
+        easterEggTimeout.current = window.setTimeout(() => setEasterEggPhoto(null), 4000);
+      }
+    }
+    setPage('notes');
+    setMobileNavOpen(false);
+  };
 
   useEffect(() => {
     const handleKey = (event) => {
@@ -661,7 +694,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
-        <button className="brand" onClick={() => { setPage('notes'); setMobileNavOpen(false); }}><span className="brand-mark"><BookOpen size={20} /></span><span>szpontownia<span className="brand-dot">.</span><small>NOTATKI ZAWODOWE</small></span></button>
+        <button className="brand" onClick={handleBrandClick}><span className="brand-mark"><BookOpen size={20} /></span><span>szpontownia<span className="brand-dot">.</span><small>NOTATKI ZAWODOWE</small></span></button>
         <div className="side-label">TWOJE MIEJSCE</div>
         <nav aria-label="Nawigacja główna">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-link ${page === id ? 'nav-active' : ''}`} onClick={() => { setPage(id); setMobileNavOpen(false); }}><Icon size={18} /><span>{label}</span>{id === 'notes' && <span className="nav-count">{notes.length}</span>}</button>)}</nav>
         <div className="sidebar-bottom"><div className="side-rule" /><div className="workspace-label"><span className="workspace-dot" /><div><strong>{hasSupabaseConfig ? 'Tablica grupy' : 'Lokalny podgląd'}</strong><small>{hasSupabaseConfig ? 'wspólna przestrzeń' : 'dane na tym urządzeniu'}</small></div><MoreHorizontal size={17} /></div>
@@ -682,6 +715,13 @@ export default function App() {
       </main>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSignedIn={() => setAuthOpen(false)} />}
       {composerOpen && <NoteDialog draft={draft} setDraft={setDraft} onClose={() => setComposerOpen(false)} onSave={saveNote} saving={saving} canUpload={Boolean(supabase)} />}
+      {easterEggPhoto && <div className="easter-egg-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setEasterEggPhoto(null); }}>
+        <div className="easter-egg-dialog" role="dialog" aria-modal="true" aria-label="Niespodzianka">
+          <button className="icon-button easter-egg-close" aria-label="Zamknij niespodziankę" onClick={() => setEasterEggPhoto(null)}><X size={18} /></button>
+          <img src={easterEggPhoto} alt="Losowe zdjęcie-niespodzianka" />
+          <p>Udało Ci się znaleźć easter egga!</p>
+        </div>
+      </div>}
       {notice && <div className="toast" role="status"><Check size={17} />{notice}<button aria-label="Zamknij komunikat" onClick={() => setNotice('')}><X size={15} /></button></div>}
     </div>
   );
