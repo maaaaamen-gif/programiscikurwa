@@ -162,6 +162,7 @@ function OcrPage({ onUseText }) {
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState('');
   const [text, setText] = useState('');
+  const [copyNotice, setCopyNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -179,6 +180,7 @@ function OcrPage({ onUseText }) {
     if (!file) return;
     setImage(file);
     setText('');
+    setCopyNotice('');
     setFilterNotice('');
     setIgnoredChrome([]);
     setError('');
@@ -225,6 +227,15 @@ function OcrPage({ onUseText }) {
     }
   };
 
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyNotice('Tekst skopiowany.');
+    } catch {
+      setCopyNotice('Nie udało się skopiować tekstu.');
+    }
+  };
+
   return (
     <>
       <section className="tool-heading"><span className="eyebrow">CZYTANIE ZE ZDJĘĆ</span><h1>Zdjęcie wchodzi.<br /><span>Tekst wychodzi.</span></h1><p>OCR odczytuje tekst w przeglądarce, a Gemini pomaga pominąć elementy interfejsu. Wynik możesz poprawić przed zapisaniem.</p></section>
@@ -233,8 +244,9 @@ function OcrPage({ onUseText }) {
           {preview ? <img src={preview} alt="Wybrane zdjęcie do odczytu" /> : <><span className="upload-icon"><ScanText size={24} /></span><strong>Wybierz zdjęcie notatek</strong><span>JPG, PNG lub WEBP</span><span className="button button-quiet"><Upload size={16} />Wybierz plik</span></>}
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => readImage(event.target.files?.[0])} />
         </label><p className="privacy-note"><ShieldCheck size={15} />Zdjęcie zostaje na urządzeniu; rozpoznany tekst jest wysyłany do Gemini w celu filtrowania.</p></div>
-        <div className="ocr-result"><div className="result-heading"><div><span className="eyebrow">WYNIK OCR</span><h2>Rozpoznany tekst</h2></div>{text && <button className="icon-button" title="Kopiuj tekst" aria-label="Kopiuj tekst" onClick={() => navigator.clipboard.writeText(text)}><FileText size={17} /></button>}</div>
-          {busy ? <div className="ocr-progress"><LoaderCircle size={19} className="spin" /><span>{progress}</span></div> : error ? <p className="form-error">{error}</p> : <textarea aria-label="Rozpoznany tekst, możesz go edytować" value={text} onChange={(event) => setText(event.target.value)} placeholder="Rozpoznany tekst pojawi się tutaj. Możesz go poprawić przed zapisaniem." />}
+        <div className="ocr-result"><div className="result-heading"><div><span className="eyebrow">WYNIK OCR</span><h2>Rozpoznany tekst</h2></div>{text && <button type="button" className="button button-quiet button-small" onClick={copyText}><Copy size={14} />Kopiuj tekst</button>}</div>
+          {busy ? <div className="ocr-progress"><LoaderCircle size={19} className="spin" /><span>{progress}</span></div> : error ? <p className="form-error">{error}</p> : <textarea aria-label="Rozpoznany tekst, możesz go edytować" value={text} onChange={(event) => { setText(event.target.value); setCopyNotice(''); }} placeholder="Rozpoznany tekst pojawi się tutaj. Możesz go poprawić przed zapisaniem." />}
+          {!busy && copyNotice && <p className={`copy-status ${copyNotice.startsWith('Nie') ? 'copy-status-error' : ''}`} role="status">{copyNotice}</p>}
           {!busy && filterNotice && <p className="form-error">{filterNotice}</p>}
           {!busy && ignoredChrome.length > 0 && <p className="progress-caption"><Check size={14} />Pominięto nazwę programu: {ignoredChrome.join(', ')}</p>}
           {!busy && progress && !error && <p className="progress-caption"><Check size={14} />{progress}</p>}
@@ -250,6 +262,9 @@ function CodePage({ onUseCode }) {
   const [code, setCode] = useState('');
   const [explanation, setExplanation] = useState('');
   const [lessonNotes, setLessonNotes] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [readingAttachment, setReadingAttachment] = useState(false);
   const [fileExtension, setFileExtension] = useState('html');
   const [includeStyles, setIncludeStyles] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -275,11 +290,36 @@ function CodePage({ onUseCode }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `szpontownia-kod.${fileExtension}`;
+    link.download = `szpontownia-kod.${fileExtension === 'mysql' ? 'sql' : fileExtension}`;
     document.body.append(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const readAttachment = async (file) => {
+    setAttachmentError('');
+    if (!file) return;
+    setAttachment(null);
+    if (!/\.(sql|txt|csv|json|xml|md|ya?ml)$/i.test(file.name)) {
+      setAttachmentError('Dołącz plik tekstowy, np. eksport .sql, .csv lub .json.');
+      return;
+    }
+    if (file.size > 750 * 1024) {
+      setAttachmentError('Plik nie może przekraczać 750 KB.');
+      return;
+    }
+    setReadingAttachment(true);
+    try {
+      const content = await file.text();
+      if (!content.trim()) throw new Error('Plik jest pusty.');
+      setAttachment({ name: file.name, content });
+    } catch (fileError) {
+      setAttachmentError(fileError.message || 'Nie udało się odczytać pliku.');
+      setAttachment(null);
+    } finally {
+      setReadingAttachment(false);
+    }
   };
 
   const generate = async (event) => {
@@ -291,7 +331,7 @@ function CodePage({ onUseCode }) {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, lessonNotes, includeStyles }),
+        body: JSON.stringify({ prompt, lessonNotes, includeStyles, fileExtension, attachment }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nie udało się wygenerować kodu.');
@@ -312,7 +352,7 @@ function CodePage({ onUseCode }) {
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={10000} rows={7} placeholder="Np. Napisz stronę, która przelicza temperaturę ze stopni Celsjusza na Fahrenheita." />
         <label className="format-picker">Format pobieranego pliku
           <select value={fileExtension} onChange={(event) => setFileExtension(event.target.value)}>
-            <option value="html">HTML (.html) — format domyślny</option><option value="js">JavaScript (.js)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="txt">Tekst (.txt)</option>
+            <option value="html">HTML (.html) — format domyślny</option><option value="js">JavaScript (.js)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="mysql">MySQL (.sql)</option><option value="txt">Tekst (.txt)</option>
           </select>
         </label>
         <label className={`style-toggle ${includeStyles ? 'style-toggle-on' : ''}`}>
@@ -323,7 +363,16 @@ function CodePage({ onUseCode }) {
           <textarea value={lessonNotes} onChange={(event) => setLessonNotes(event.target.value)} maxLength={12000} rows={5} placeholder="Wklej notatki lub przykładowy styl kodu. Generator wykorzysta je jako kontekst." />
           <small>{lessonNotes.length} / 12 000 znaków. Notatki zostaną wysłane do Gemini razem z poleceniem.</small>
         </label>
-        <div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>
+        <div className="generator-context">
+          <span>Plik referencyjny (opcjonalnie)</span>
+          <div className="generator-file-row">
+            <label className="generator-file-picker"><Upload size={15} />{readingAttachment ? 'Odczytuję plik...' : attachment?.name || 'Wybierz plik'}<input type="file" accept=".sql,.txt,.csv,.json,.xml,.md,.yaml,.yml" disabled={busy || readingAttachment} onChange={(event) => { readAttachment(event.target.files?.[0]); event.target.value = ''; }} /></label>
+            {attachment && <button type="button" className="icon-button" aria-label="Usuń załącznik" title="Usuń załącznik" onClick={() => { setAttachment(null); setAttachmentError(''); }}><X size={16} /></button>}
+          </div>
+          <small>Pliki tekstowe do 750 KB, np. eksport bazy .sql. Zawartość zostanie wysłana do Gemini jako kontekst.</small>
+        </div>
+        {attachmentError && <p className="form-error"><AlertCircle size={15} />{attachmentError}</p>}
+        <div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy || readingAttachment}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>
         {error && <p className="form-error"><AlertCircle size={15} />{error}</p>}
       </form>
         <div className="code-output"><div className="result-heading"><div><span className="eyebrow">REZULTAT</span><h2>Kod i wyjaśnienie</h2></div></div>
