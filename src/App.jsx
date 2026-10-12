@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronDown, Database,
+  AlertCircle, ArrowRight, BookOpen, Check, ChevronDown, Database,
   Code2, Copy, Download, FileImage, FileText, FolderOpen, KeyRound, LoaderCircle, LogIn,
-  LogOut, Menu, MoreHorizontal, Plus, ScanText, Search, ShieldCheck, Sparkles,
+  LogOut, Menu, MoreHorizontal, Pencil, Plus, ScanText, Search, ShieldCheck, Sparkles,
   Trash2, Upload, X,
 } from 'lucide-react';
 import { cleanOcrPage } from './lib/ocr.js';
@@ -146,7 +146,7 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
           <label>Kod lub treść<textarea required rows={12} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Wklej kod lub wpisz treść notatki..." /></label>
           <label className={`file-picker ${!canUpload ? 'file-picker-disabled' : ''}`}>
             <Upload size={17} /><span><strong>Dołącz pliki</strong><small>{canUpload ? 'Dowolny typ pliku do 20 MB' : 'Dostępne po podłączeniu bazy danych'}</small></span>
-            <input type="file" multiple disabled={!canUpload} onChange={(event) => setDraft({ ...draft, files: [...draft.files, ...Array.from(event.target.files || [])] })} />
+            <input type="file" multiple disabled={!canUpload} onChange={(event) => { setDraft({ ...draft, files: [...draft.files, ...Array.from(event.target.files || [])] }); event.target.value = ''; }} />
           </label>
           {draft.files.length > 0 && <div className="selected-files">{draft.files.map((file, index) => <span className="selected-file" key={`${file.name}-${index}`}><FileText size={14} />{file.name}<button type="button" aria-label={`Usuń ${file.name}`} onClick={() => setDraft({ ...draft, files: draft.files.filter((_, fileIndex) => fileIndex !== index) })}><X size={13} /></button></span>)}</div>}
           <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Anuluj</button><button className="button button-primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}Dodaj notatkę</button></div>
@@ -156,9 +156,45 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
   );
 }
 
-function NotesPage({ notes, search, setSearch, onNew, onDelete, onMove, onAttachment, canDelete, loading }) {
+function NoteEditDialog({ note, onClose, onSave, saving }) {
+  const [draft, setDraft] = useState({
+    title: note.title,
+    content: note.content,
+    attachments: note.attachments || [],
+    files: [],
+  });
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="dialog note-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-note-dialog-title">
+        <div className="dialog-heading">
+          <div><span className="eyebrow">EDYCJA ADMINISTRATORA</span><h2 id="edit-note-dialog-title">Edytuj notatkę</h2></div>
+          <button className="icon-button" onClick={onClose} aria-label="Zamknij"><X size={18} /></button>
+        </div>
+        <form className="form-stack" onSubmit={(event) => { event.preventDefault(); onSave(draft); }}>
+          <label>Tytuł<input required autoFocus maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+          <label>Opis i treść<textarea required rows={12} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
+          <label className="file-picker">
+            <Upload size={17} /><span><strong>Dodaj pliki</strong><small>Dowolny typ pliku do 20 MB</small></span>
+            <input type="file" multiple onChange={(event) => { setDraft({ ...draft, files: [...draft.files, ...Array.from(event.target.files || [])] }); event.target.value = ''; }} />
+          </label>
+          {(draft.attachments.length > 0 || draft.files.length > 0) && (
+            <div className="selected-files">
+              {draft.attachments.map((file) => <span className="selected-file" key={file.path}><FileText size={14} />{file.name}<button type="button" aria-label={`Usuń ${file.name}`} onClick={() => setDraft({ ...draft, attachments: draft.attachments.filter((attachment) => attachment.path !== file.path) })}><X size={13} /></button></span>)}
+              {draft.files.map((file, index) => <span className="selected-file" key={`${file.name}-${index}`}><FileText size={14} />{file.name}<button type="button" aria-label={`Usuń ${file.name}`} onClick={() => setDraft({ ...draft, files: draft.files.filter((_, fileIndex) => fileIndex !== index) })}><X size={13} /></button></span>)}
+            </div>
+          )}
+          <div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Anuluj</button><button className="button button-primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Zapisz zmiany</button></div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function NotesPage({ notes, search, setSearch, onNew, onEdit, onDelete, onMove, onAttachment, onDownload, canManage, loading }) {
   const [copyStatus, setCopyStatus] = useState(null);
   const [movingNoteId, setMovingNoteId] = useState(null);
+  const [expandedNoteIds, setExpandedNoteIds] = useState(() => new Set());
   const [selectedFolder, setSelectedFolder] = useState('websites');
   const visibleNotes = useMemo(() => notes.filter((note) => {
     const query = search.trim().toLowerCase();
@@ -193,11 +229,20 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onMove, onAttach
     }
   };
 
+  const toggleNote = (noteId) => {
+    setExpandedNoteIds((current) => {
+      const next = new Set(current);
+      if (next.has(noteId)) next.delete(noteId);
+      else next.add(noteId);
+      return next;
+    });
+  };
+
   return (
     <>
       <section className="page-intro">
         <div><span className="eyebrow">NOTATNIK / {new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' }).format(new Date()).toUpperCase()}</span><h1>Wiedza krąży.<br /><span>Notatki zostają.</span></h1><p>Jedno miejsce na to, czego uczymy się na zawodowych.</p></div>
-        <button className="button button-primary new-note-button" onClick={onNew}><Plus size={18} />Dodaj notatkę</button>
+        <button className="button button-primary new-note-button" onClick={() => onNew()}><Plus size={18} />Dodaj notatkę</button>
         <div className="intro-stamp"><BookOpen size={20} /><span>{notes.length.toString().padStart(2, '0')}<small>notatek</small></span></div>
       </section>
       <section className="notes-section">
@@ -217,13 +262,15 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onMove, onAttach
         ) : (
           <div className="note-groups">{dateGroups.map((group) => <section className="date-group" key={dateGroupKey(group.date)}>
             <h3 className="date-group-heading">{dateGroupLabel(group.date)}</h3>
-            <div className="notes-list">{group.notes.map((note, index) => <article className="note-row" key={note.id}>
+            <div className="notes-list">{group.notes.map((note, index) => {
+              const isExpanded = expandedNoteIds.has(note.id);
+              return <article className={`note-row ${isExpanded ? 'note-row-expanded' : ''}`} key={note.id}>
               <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
-              <div className="note-main"><div className="note-meta"><span className="note-date">{timeLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><h3>{note.title}</h3><p>{note.content}</p>
-                {copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
-                {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
+              <div className="note-main"><div className="note-meta"><span className="note-date">{timeLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><button type="button" className="note-expand-button" aria-expanded={isExpanded} onClick={() => toggleNote(note.id)}><h3>{note.title}</h3><ChevronDown size={17} /></button><p className={isExpanded ? 'note-content-expanded' : 'note-content-collapsed'}>{note.content}</p>
+                {isExpanded && copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
+                {isExpanded && note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <div key={file.path} className="attachment-item"><button type="button" className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} /><span>{file.name}</span></button><button type="button" className="attachment-download" onClick={() => onDownload(file)} aria-label={`Pobierz ${file.name}`} title={`Pobierz ${file.name}`}><Download size={15} /><span>Pobierz</span></button></div>)}</div>}
               </div>
-              {canDelete(note) && <div className="note-admin-actions">
+              {canManage(note) && <div className="note-admin-actions">
                 <label className="note-folder-select-label" aria-label={`Zmień folder notatki: ${note.title}`}>
                   <FolderOpen size={15} />
                   <select
@@ -236,9 +283,11 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onMove, onAttach
                     {NOTE_FOLDERS.map((folder) => <option key={folder.id} value={folder.subject}>{folder.label}</option>)}
                   </select>
                 </label>
+                <button className="icon-button" onClick={() => onEdit(note)} aria-label={`Edytuj notatkę: ${note.title}`} title="Edytuj notatkę"><Pencil size={16} /></button>
                 <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>
               </div>}
-            </article>)}</div>
+            </article>;
+            })}</div>
           </section>)}</div>
         )}
       </section>
@@ -526,6 +575,7 @@ export default function App() {
   const [loading, setLoading] = useState(hasSupabaseConfig);
   const [authOpen, setAuthOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState({ title: '', content: '', subject: NOTE_FOLDERS[1].subject, files: [] });
   const [notice, setNotice] = useState('');
@@ -647,7 +697,59 @@ export default function App() {
     }
   };
 
-  const canDelete = () => !supabase || isAdmin;
+  const canManage = () => Boolean(supabase && isAdmin);
+
+  const saveEditedNote = async (note, editDraft) => {
+    if (!supabase || !isAdmin) {
+      setNotice('Edycja notatek jest dostępna tylko dla administratora.');
+      return;
+    }
+
+    setSaving(true);
+    const uploadedPaths = [];
+    try {
+      const newAttachments = [];
+      for (const file of editDraft.files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `shared/${crypto.randomUUID()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from('note-files').upload(filePath, file, { contentType: file.type || 'application/octet-stream' });
+        if (uploadError) throw uploadError;
+        uploadedPaths.push(filePath);
+        newAttachments.push({ name: file.name, path: filePath, size: file.size, type: file.type });
+      }
+
+      const attachments = [...editDraft.attachments, ...newAttachments];
+      const { data, error: updateError } = await supabase
+        .from('notes')
+        .update({ title: editDraft.title.trim(), content: editDraft.content.trim(), attachments })
+        .eq('id', note.id)
+        .select()
+        .single();
+      if (updateError) throw updateError;
+
+      setNotes((current) => current.map((item) => item.id === note.id ? data : item));
+      setEditingNote(null);
+      const remainingPaths = new Set(editDraft.attachments.map((file) => file.path));
+      const removedPaths = (note.attachments || []).map((file) => file.path).filter((filePath) => filePath && !remainingPaths.has(filePath));
+      if (removedPaths.length) {
+        const { error: removeError } = await supabase.storage.from('note-files').remove(removedPaths);
+        if (removeError) {
+          setNotice(`Notatka została zapisana, ale nie udało się usunąć części plików: ${removeError.message}`);
+          return;
+        }
+      }
+      setNotice('Notatka została zaktualizowana.');
+    } catch (saveError) {
+      let message = `Nie udało się zaktualizować notatki: ${saveError.message || 'nieznany błąd.'}`;
+      if (uploadedPaths.length) {
+        const { error: cleanupError } = await supabase.storage.from('note-files').remove(uploadedPaths);
+        if (cleanupError) message += ` Nie udało się też usunąć przesłanych plików: ${cleanupError.message}`;
+      }
+      setNotice(message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const deleteNote = async (note) => {
     if (!window.confirm(`Usunąć notatkę „${note.title}”?`)) return;
@@ -716,6 +818,25 @@ export default function App() {
     }
   };
 
+  const downloadAttachment = async (file) => {
+    if (!supabase) return;
+    try {
+      const { data, error: urlError } = await supabase.storage
+        .from('note-files')
+        .createSignedUrl(file.path, 60, { download: file.name });
+      if (urlError) throw urlError;
+      const link = document.createElement('a');
+      link.href = data.signedUrl;
+      link.download = file.name;
+      link.rel = 'noreferrer';
+      document.body.append(link);
+      link.click();
+      link.remove();
+    } catch (downloadError) {
+      setNotice(downloadError.message || 'Nie udało się pobrać załącznika.');
+    }
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) setNotice(error.message);
@@ -744,7 +865,7 @@ export default function App() {
         <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Szpontownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
         <div className="content-wrap">
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
-          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={(subject) => openComposer('', subject)} onDelete={deleteNote} onMove={moveNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
+          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={(subject) => openComposer('', subject)} onEdit={setEditingNote} onDelete={deleteNote} onMove={moveNote} onAttachment={openAttachment} onDownload={downloadAttachment} canManage={canManage} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
           {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
           <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
@@ -752,11 +873,12 @@ export default function App() {
       </main>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSignedIn={() => setAuthOpen(false)} />}
       {composerOpen && <NoteDialog draft={draft} setDraft={setDraft} onClose={() => setComposerOpen(false)} onSave={saveNote} saving={saving} canUpload={Boolean(supabase)} />}
+      {editingNote && <NoteEditDialog key={editingNote.id} note={editingNote} onClose={() => setEditingNote(null)} onSave={(editDraft) => saveEditedNote(editingNote, editDraft)} saving={saving} />}
       {easterEggPhoto && <div className="easter-egg-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setEasterEggPhoto(null); }}>
         <div className="easter-egg-dialog" role="dialog" aria-modal="true" aria-label="Niespodzianka">
           <button className="icon-button easter-egg-close" aria-label="Zamknij niespodziankę" onClick={() => setEasterEggPhoto(null)}><X size={18} /></button>
           <img src={easterEggPhoto} alt="Losowe zdjęcie-niespodzianka" />
-          <p>Udało Ci się znaleźć easter egga!</p>
+          <p>co to tu kurwa robi!</p>
         </div>
       </div>}
       {notice && <div className="toast" role="status"><Check size={17} />{notice}<button aria-label="Zamknij komunikat" onClick={() => setNotice('')}><X size={15} /></button></div>}

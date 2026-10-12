@@ -1,8 +1,8 @@
 # Szpontownia — wspólne notatki zawodowe
 
-Lekka aplikacja dla grupy uczącej się zawodu. Każdy może przeglądać i dodawać notatki bez konta. Tylko administrator loguje się, aby usuwać wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
+Lekka aplikacja dla grupy uczącej się zawodu. Każdy może przeglądać i dodawać notatki bez konta. Administrator loguje się, aby moderować wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
 
-Notatki są dostępne w dwóch folderach: „Bazy danych” oraz „Aplikacje / strony internetowe”. W każdym folderze wpisy są grupowane według daty. Podczas dodawania notatki można wybrać folder; starsze wpisy bez przypisanego folderu pozostają widoczne, a wpisy dotyczące baz danych są rozpoznawane po treści.
+Notatki są dostępne w dwóch folderach: „Bazy danych” oraz „Aplikacje / strony internetowe”. W każdym folderze wpisy są grupowane według daty. Podczas dodawania notatki można wybrać folder; starsze wpisy bez przypisanego folderu pozostają widoczne, a wpisy dotyczące baz danych są rozpoznawane po treści. Załączniki można otwierać lub pobierać z obu folderów; pobrane pliki zachowują oryginalną nazwę, w tym polskie znaki.
 
 ## Uruchomienie lokalne
 
@@ -20,7 +20,7 @@ Bez `.env` działa lokalny podgląd z przykładowymi notatkami. Są one zapisywa
 3. W Supabase otwórz Authentication → Users → Add user i utwórz swoje konto administratora.
 4. W SQL Editor wykonaj zapytanie z końca pliku `supabase/schema.sql`, wpisując e-mail tego konta. Rejestracja publiczna nie jest potrzebna.
 
-W Supabase ustaw adres aplikacji w Authentication → URL Configuration. Bucket `note-files` ogranicza dowolne typy plików do 20 MB. Wspólna tablica i załączniki są publicznie dostępne; każdy może dodawać treści i pliki, ale tylko administrator może przenosić notatki między folderami i je usuwać. Po zmianie ograniczeń typów plików uruchom ponownie `supabase/schema.sql` w SQL Editorze Supabase. Udostępniaj adres z rozwagą, bo publiczny dostęp może przyciągać spam.
+W Supabase ustaw adres aplikacji w Authentication → URL Configuration. Bucket `note-files` ogranicza dowolne typy plików do 20 MB. Wspólna tablica i załączniki są publicznie dostępne; każdy może dodawać treści i pliki, ale tylko administrator może edytować tytuł i treść, dodawać lub usuwać załączniki, przenosić notatki między folderami i je usuwać. Po zmianie ograniczeń typów plików uruchom ponownie `supabase/schema.sql` w SQL Editorze Supabase. Udostępniaj adres z rozwagą, bo publiczny dostęp może przyciągać spam.
 
 ## Generator kodu
 

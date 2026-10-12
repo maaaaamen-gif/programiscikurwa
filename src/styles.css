@@ -121,8 +121,13 @@ h1, h2, h3, p { margin-top: 0; }
 .copy-note-button:hover:not(:disabled) { border-color: rgba(148, 163, 184, 0.2); color: var(--green); }
 .copy-note-button:disabled { cursor: not-allowed; opacity: .55; }
 .copy-note-status { display: block; margin-top: 6px; color: #9fe0c3; font-size: 10px; }
-.note-main h3 { margin: 5px 0 6px; overflow-wrap: anywhere; font: 700 15px var(--display); }
+.note-expand-button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.note-expand-button h3 { min-width: 0; margin: 5px 0 6px; overflow-wrap: anywhere; font: 700 15px var(--display); }
+.note-expand-button svg { flex: 0 0 auto; color: #8f9ba5; transition: transform .16s, color .16s; }
+.note-expand-button:hover svg, .note-row-expanded .note-expand-button svg { color: var(--green); }
+.note-row-expanded .note-expand-button svg { transform: rotate(180deg); }
 .note-main > p { max-width: 780px; margin: 0; color: #bac8cf; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-main > p.note-content-collapsed { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 1; color: #89969e; }
 .icon-button { width: 34px; height: 34px; display: inline-grid; flex: 0 0 auto; place-items: center; border: 1px solid transparent; border-radius: 5px; background: transparent; color: #a2adb7; cursor: pointer; }
 .icon-button:hover { border-color: rgba(148, 163, 184, 0.2); background: rgba(148, 163, 184, 0.05); color: var(--ink); }
 .delete-button { align-self: start; margin-top: 1px; opacity: 0; transition: opacity .15s; }
@@ -132,9 +137,13 @@ h1, h2, h3, p { margin-top: 0; }
 .note-folder-select { max-width: 112px; border: 0; outline: 0; background: transparent; color: #dfe9ee; font: 10px var(--sans); cursor: pointer; }
 .note-folder-select option { background: #111b22; color: #dfe9ee; }
 .note-folder-select:disabled { cursor: wait; opacity: .65; }
-.attachment-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
-.attachment-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 4px; background: rgba(17, 27, 34, 0.8); color: #d7e4e9; cursor: pointer; font-size: 10px; }
+.attachment-list { display: grid; gap: 7px; margin-top: 11px; }
+.attachment-item { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.attachment-link { min-width: 0; display: inline-flex; flex: 1; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 4px; background: rgba(17, 27, 34, 0.8); color: #d7e4e9; cursor: pointer; font-size: 10px; text-align: left; }
+.attachment-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-link:hover { border-color: rgba(108, 200, 163, 0.35); color: var(--green); }
+.attachment-download { min-height: 30px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 4px; background: rgba(17, 27, 34, 0.8); color: #d7e4e9; cursor: pointer; font-size: 10px; }
+.attachment-download:hover { border-color: rgba(108, 200, 163, 0.35); color: var(--green); }
 .empty-state { min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #9aa7b0; text-align: center; }
 .empty-state > strong { color: #edf3ef; font: 700 15px var(--display); }
 .empty-state p { margin: 0; font-size: 12px; }
@@ -297,10 +306,11 @@ h1, h2, h3, p { margin-top: 0; }
   .intro-stamp svg { width: 12px; height: 12px; }
   .intro-stamp span { font-size: 13px; }
   .intro-stamp small { font-size: 7px; }
-  .note-row { grid-template-columns: 31px minmax(0, 1fr) 27px; gap: 8px; padding: 17px 0; }
+  .note-row { grid-template-columns: 31px minmax(0, 1fr); gap: 8px; padding: 17px 0; }
   .note-index { width: 29px; height: 29px; }
-  .note-main h3 { font-size: 13px; }
+  .note-expand-button h3 { font-size: 13px; }
   .note-main > p { font-size: 11px; }
+  .note-admin-actions { grid-column: 2; justify-content: flex-end; }
   .delete-button { width: 27px; height: 27px; opacity: 1; }
   .note-meta { gap: 7px; flex-wrap: wrap; }
   .note-date { font-size: 9px; }
