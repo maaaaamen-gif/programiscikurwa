@@ -245,12 +245,13 @@ function OcrPage({ onUseText }) {
   );
 }
 
-function CodePage({ onUseCode, isAdmin }) {
+function CodePage({ onUseCode }) {
   const [prompt, setPrompt] = useState('Napisz funkcję JavaScript, która sprawdza, czy podany numer portu jest w zakresie 1–65535. Dodaj obsługę błędnych danych.');
   const [code, setCode] = useState('');
   const [explanation, setExplanation] = useState('');
   const [lessonNotes, setLessonNotes] = useState('');
-  const [fileExtension, setFileExtension] = useState('js');
+  const [fileExtension, setFileExtension] = useState('html');
+  const [includeStyles, setIncludeStyles] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
@@ -287,17 +288,10 @@ function CodePage({ onUseCode, isAdmin }) {
     setError('');
     setCopyNotice('');
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (isAdmin && lessonNotes.trim()) {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        if (!session?.access_token) throw new Error('Sesja administratora wygasła. Zaloguj się ponownie.');
-        headers.Authorization = `Bearer ${session.access_token}`;
-      }
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ prompt, ...(isAdmin && lessonNotes.trim() ? { lessonNotes } : {}) }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, lessonNotes, includeStyles }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nie udało się wygenerować kodu.');
@@ -318,13 +312,17 @@ function CodePage({ onUseCode, isAdmin }) {
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={10000} rows={7} placeholder="Np. Napisz stronę, która przelicza temperaturę ze stopni Celsjusza na Fahrenheita." />
         <label className="format-picker">Format pobieranego pliku
           <select value={fileExtension} onChange={(event) => setFileExtension(event.target.value)}>
-            <option value="js">JavaScript (.js)</option><option value="html">HTML (.html)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="txt">Tekst (.txt)</option>
+            <option value="html">HTML (.html) — format domyślny</option><option value="js">JavaScript (.js)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="txt">Tekst (.txt)</option>
           </select>
         </label>
-        {isAdmin && <label className="generator-context">Notatki z lekcji (tylko administrator)
+        <label className={`style-toggle ${includeStyles ? 'style-toggle-on' : ''}`}>
+          <input type="checkbox" checked={includeStyles} onChange={(event) => setIncludeStyles(event.target.checked)} />
+          <span className="style-toggle-copy"><strong>Style: {includeStyles ? 'włączone' : 'wyłączone'}</strong><small>{includeStyles ? 'Generator doda style zgodne z poleceniem lub dobierze je sam.' : 'Generator nie doda stylów. Włącz je, aby poprosić o wygląd zgodny z poleceniem.'}</small></span>
+        </label>
+        <label className="generator-context">Notatki dodatkowe (opcjonalnie)
           <textarea value={lessonNotes} onChange={(event) => setLessonNotes(event.target.value)} maxLength={12000} rows={5} placeholder="Wklej notatki lub przykładowy styl kodu. Generator wykorzysta je jako kontekst." />
           <small>{lessonNotes.length} / 12 000 znaków. Notatki zostaną wysłane do Gemini razem z poleceniem.</small>
-        </label>}
+        </label>
         <div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>
         {error && <p className="form-error"><AlertCircle size={15} />{error}</p>}
       </form>
@@ -495,7 +493,7 @@ export default function App() {
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
           {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={() => openComposer()} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
-          {page === 'code' && <CodePage isAdmin={isAdmin} onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
+          {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
           <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
         </div>
       </main>
