@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle, ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronDown,
-  Code2, FileImage, FileText, FolderOpen, KeyRound, LoaderCircle, LogIn,
+  Code2, Copy, Download, FileImage, FileText, FolderOpen, KeyRound, LoaderCircle, LogIn,
   LogOut, Menu, MoreHorizontal, Plus, ScanText, Search, ShieldCheck, Sparkles,
   Trash2, Upload, X,
 } from 'lucide-react';
@@ -114,10 +114,20 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
 }
 
 function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, canDelete, loading }) {
+  const [copyStatus, setCopyStatus] = useState(null);
   const visibleNotes = useMemo(() => notes.filter((note) => {
     const query = search.trim().toLowerCase();
     return !query || `${note.title} ${note.content}`.toLowerCase().includes(query);
   }), [notes, search]);
+
+  const copyNoteContent = async (note) => {
+    try {
+      await navigator.clipboard.writeText(note.content);
+      setCopyStatus({ id: note.id, message: 'Treść skopiowana.' });
+    } catch {
+      setCopyStatus({ id: note.id, message: 'Nie udało się skopiować treści.' });
+    }
+  };
 
   return (
     <>
@@ -136,7 +146,8 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, ca
         ) : (
           <div className="notes-list">{visibleNotes.map((note, index) => <article className="note-row" key={note.id}>
             <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
-            <div className="note-main"><div className="note-meta"><span className="note-date">{dateLabel(note.created_at)}</span></div><h3>{note.title}</h3><p>{note.content}</p>
+            <div className="note-main"><div className="note-meta"><span className="note-date">{dateLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><h3>{note.title}</h3><p>{note.content}</p>
+              {copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
               {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
             </div>
             {canDelete(note) && <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>}
@@ -234,26 +245,64 @@ function OcrPage({ onUseText }) {
   );
 }
 
-function CodePage({ onUseCode }) {
+function CodePage({ onUseCode, isAdmin }) {
   const [prompt, setPrompt] = useState('Napisz funkcję JavaScript, która sprawdza, czy podany numer portu jest w zakresie 1–65535. Dodaj obsługę błędnych danych.');
   const [code, setCode] = useState('');
+  const [explanation, setExplanation] = useState('');
+  const [lessonNotes, setLessonNotes] = useState('');
+  const [fileExtension, setFileExtension] = useState('js');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [copyNotice, setCopyNotice] = useState('');
   const [generatorReady, setGeneratorReady] = useState(null);
 
   useEffect(() => {
     fetch('/api/health').then((response) => response.json()).then((health) => setGeneratorReady(health.generatorConfigured)).catch(() => setGeneratorReady(false));
   }, []);
 
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyNotice('Kod skopiowany.');
+    } catch {
+      setCopyNotice('Nie udało się skopiować kodu.');
+    }
+  };
+
+  const downloadCode = () => {
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `szpontownia-kod.${fileExtension}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const generate = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError('');
+    setCopyNotice('');
     try {
-      const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+      const headers = { 'Content-Type': 'application/json' };
+      if (isAdmin && lessonNotes.trim()) {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session?.access_token) throw new Error('Sesja administratora wygasła. Zaloguj się ponownie.');
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt, ...(isAdmin && lessonNotes.trim() ? { lessonNotes } : {}) }),
+      });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Nie udało się wygenerować kodu.');
       setCode(result.code);
+      setExplanation(result.explanation);
     } catch (generationError) {
       setError(generationError.message || 'Serwer generatora jest niedostępny.');
     } finally {
@@ -263,9 +312,30 @@ function CodePage({ onUseCode }) {
 
   return (
     <>
-      <section className="tool-heading"><span className="eyebrow">POMOCNIK PROGRAMISTY</span><h1>Pomysł wchodzi.<br /><span>Kod wychodzi.</span></h1><p>Opisz zadanie prostymi słowami, a Gemini przygotuje przykładowe rozwiązanie.</p></section>
-      <section className="code-workspace"><form className="prompt-panel" onSubmit={generate}><div className="result-heading"><div><span className="eyebrow">TWOJE POLECENIE</span><h2>Co mamy napisać?</h2></div><span className={`service-status ${generatorReady ? 'is-ready' : ''}`}><span />{generatorReady === null ? 'Sprawdzam' : generatorReady ? 'Generator aktywny' : 'Brak klucza API'}</span></div><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={10000} rows={7} placeholder="Np. Napisz stronę, która przelicza temperaturę ze stopni Celsjusza na Fahrenheita." /><div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>{error && <p className="form-error"><AlertCircle size={15} />{error}</p>}</form>
-        <div className="code-output"><div className="result-heading"><div><span className="eyebrow">REZULTAT</span><h2>Gotowy do sprawdzenia</h2></div>{code && <button className="icon-button" title="Kopiuj kod" aria-label="Kopiuj kod" onClick={() => navigator.clipboard.writeText(code)}><FileText size={17} /></button>}</div>{code ? <><pre><code>{code}</code></pre><button className="button button-primary" onClick={() => onUseCode(code)}><Plus size={16} />Zapisz w notatkach</button></> : <div className="code-empty"><Code2 size={23} /><p>Wygenerowany kod pojawi się tutaj.</p></div>}</div>
+      <section className="tool-heading"><span className="eyebrow">POMOCNIK PROGRAMISTY</span><h1>Pomysł wchodzi.<br /><span>Kod wychodzi.</span></h1><p>Opisz zadanie prostymi słowami, a Gemini przygotuje czysty kod i osobne wyjaśnienie.</p></section>
+      <section className="code-workspace"><form className="prompt-panel" onSubmit={generate}>
+        <div className="result-heading"><div><span className="eyebrow">TWOJE POLECENIE</span><h2>Co mamy napisać?</h2></div><span className={`service-status ${generatorReady ? 'is-ready' : ''}`}><span />{generatorReady === null ? 'Sprawdzam' : generatorReady ? 'Generator aktywny' : 'Brak klucza API'}</span></div>
+        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={10000} rows={7} placeholder="Np. Napisz stronę, która przelicza temperaturę ze stopni Celsjusza na Fahrenheita." />
+        <label className="format-picker">Format pobieranego pliku
+          <select value={fileExtension} onChange={(event) => setFileExtension(event.target.value)}>
+            <option value="js">JavaScript (.js)</option><option value="html">HTML (.html)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="txt">Tekst (.txt)</option>
+          </select>
+        </label>
+        {isAdmin && <label className="generator-context">Notatki z lekcji (tylko administrator)
+          <textarea value={lessonNotes} onChange={(event) => setLessonNotes(event.target.value)} maxLength={12000} rows={5} placeholder="Wklej notatki lub przykładowy styl kodu. Generator wykorzysta je jako kontekst." />
+          <small>{lessonNotes.length} / 12 000 znaków. Notatki zostaną wysłane do Gemini razem z poleceniem.</small>
+        </label>}
+        <div className="prompt-footer"><small>{prompt.length} / 10 000</small><button className="button button-dark" disabled={!prompt.trim() || busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{busy ? 'Piszę kod...' : 'Generuj kod'}</button></div>
+        {error && <p className="form-error"><AlertCircle size={15} />{error}</p>}
+      </form>
+        <div className="code-output"><div className="result-heading"><div><span className="eyebrow">REZULTAT</span><h2>Kod i wyjaśnienie</h2></div></div>
+          {code ? <div className="generated-result">
+            <section className="generated-code"><div className="generated-section-heading"><h3>Czysty kod</h3><div className="generated-actions"><button className="button button-quiet button-small" onClick={copyCode}><Copy size={14} />Kopiuj</button><button className="button button-quiet button-small" onClick={downloadCode}><Download size={14} />Pobierz .{fileExtension}</button></div></div><pre><code>{code}</code></pre></section>
+            <section className="generated-explanation"><h3>Wyjaśnienie</h3><p>{explanation}</p></section>
+            <button className="button button-primary" onClick={() => onUseCode(code)}><Plus size={16} />Zapisz kod w notatkach</button>
+            {copyNotice && <p className="progress-caption" role="status">{copyNotice}</p>}
+          </div> : <div className="code-empty"><Code2 size={23} /><p>Wygenerowany kod i wyjaśnienie pojawią się tutaj.</p></div>}
+        </div>
       </section>
       <p className="tool-disclaimer"><AlertCircle size={15} />Wygenerowany kod sprawdź przed użyciem. Dostępność bezpłatnego API zależy od limitów Google AI Studio.</p>
     </>
@@ -425,7 +495,7 @@ export default function App() {
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
           {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={() => openComposer()} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
-          {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
+          {page === 'code' && <CodePage isAdmin={isAdmin} onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
           <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
         </div>
       </main>
