@@ -258,7 +258,7 @@ function OcrPage({ onUseText }) {
 }
 
 function CodePage({ onUseCode }) {
-  const [prompt, setPrompt] = useState('Napisz funkcję JavaScript, która sprawdza, czy podany numer portu jest w zakresie 1–65535. Dodaj obsługę błędnych danych.');
+  const [prompt, setPrompt] = useState('');
   const [code, setCode] = useState('');
   const [explanation, setExplanation] = useState('');
   const [lessonNotes, setLessonNotes] = useState('');
@@ -352,7 +352,7 @@ function CodePage({ onUseCode }) {
         <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={10000} rows={7} placeholder="Np. Napisz stronę, która przelicza temperaturę ze stopni Celsjusza na Fahrenheita." />
         <label className="format-picker">Format pobieranego pliku
           <select value={fileExtension} onChange={(event) => setFileExtension(event.target.value)}>
-            <option value="html">HTML (.html) — format domyślny</option><option value="js">JavaScript (.js)</option><option value="css">CSS (.css)</option><option value="java">Java (.java)</option><option value="py">Python (.py)</option><option value="mysql">MySQL (.sql)</option><option value="txt">Tekst (.txt)</option>
+            <option value="html">HTML (.html) — format domyślny</option><option value="js">JavaScript (.js)</option><option value="css">CSS (.css)</option><option value="mysql">MySQL (.sql)</option><option value="txt">Tekst (.txt)</option>
           </select>
         </label>
         <label className={`style-toggle ${includeStyles ? 'style-toggle-on' : ''}`}>
