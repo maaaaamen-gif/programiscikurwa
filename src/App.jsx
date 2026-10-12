@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertCircle, ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronDown,
+  AlertCircle, ArrowDownToLine, ArrowRight, BookOpen, Check, ChevronDown, Database,
   Code2, Copy, Download, FileImage, FileText, FolderOpen, KeyRound, LoaderCircle, LogIn,
   LogOut, Menu, MoreHorizontal, Plus, ScanText, Search, ShieldCheck, Sparkles,
   Trash2, Upload, X,
 } from 'lucide-react';
 import { cleanOcrPage } from './lib/ocr.js';
 import { hasSupabaseConfig, supabase } from './lib/supabase.js';
+
+const NOTE_FOLDERS = [
+  { id: 'database', label: 'Bazy danych', subject: 'Bazy danych', icon: Database },
+  { id: 'websites', label: 'Aplikacje / strony internetowe', subject: 'Aplikacje / strony internetowe', icon: Code2 },
+];
 
 const demoNotes = [
   {
@@ -35,9 +40,28 @@ const readLocalNotes = () => {
   }
 };
 
-const dateLabel = (value) => new Intl.DateTimeFormat('pl-PL', {
-  day: 'numeric', month: 'short', year: 'numeric',
+const timeLabel = (value) => new Intl.DateTimeFormat('pl-PL', {
+  hour: '2-digit', minute: '2-digit',
 }).format(new Date(value));
+
+const dateGroupKey = (value) => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const dateGroupLabel = (value) => new Intl.DateTimeFormat('pl-PL', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+}).format(new Date(value));
+
+const noteFolderId = (note) => {
+  const subject = (note.subject || '').toLocaleLowerCase('pl-PL');
+  if (subject.includes('bazy danych')) return 'database';
+  if (subject.includes('aplikac') || subject.includes('stron internet')) return 'websites';
+  return /\b(sql|mysql|postgres(?:ql)?|sqlite|mongodb|supabase|database|baz[ay] danych|tabela|zapytanie)\b/i
+    .test(`${note.title} ${note.content}`)
+    ? 'database'
+    : 'websites';
+};
 
 function AuthDialog({ onClose, onSignedIn }) {
   const [email, setEmail] = useState('');
@@ -101,6 +125,7 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
         </div>
         <form className="form-stack" onSubmit={onSave}>
           <label>Tytuł<input required autoFocus maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Na przykład: Formularz logowania w HTML" /></label>
+          <label>Folder<select value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })}>{NOTE_FOLDERS.map((folder) => <option key={folder.id} value={folder.subject}>{folder.label}</option>)}</select></label>
           <label>Kod lub treść<textarea required rows={12} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Wklej kod lub wpisz treść notatki..." /></label>
           <label className={`file-picker ${!canUpload ? 'file-picker-disabled' : ''}`}>
             <Upload size={17} /><span><strong>Dołącz pliki</strong><small>{canUpload ? 'Zdjęcia, PDF i dokumenty do 20 MB' : 'Dostępne po podłączeniu bazy danych'}</small></span>
@@ -116,10 +141,21 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
 
 function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, canDelete, loading }) {
   const [copyStatus, setCopyStatus] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState('websites');
   const visibleNotes = useMemo(() => notes.filter((note) => {
     const query = search.trim().toLowerCase();
-    return !query || `${note.title} ${note.content}`.toLowerCase().includes(query);
-  }), [notes, search]);
+    return noteFolderId(note) === selectedFolder
+      && (!query || `${note.title} ${note.content} ${note.subject || ''}`.toLowerCase().includes(query));
+  }), [notes, search, selectedFolder]);
+  const dateGroups = useMemo(() => {
+    const groups = new Map();
+    visibleNotes.forEach((note) => {
+      const key = dateGroupKey(note.created_at);
+      if (!groups.has(key)) groups.set(key, { date: note.created_at, notes: [] });
+      groups.get(key).notes.push(note);
+    });
+    return Array.from(groups.values());
+  }, [visibleNotes]);
 
   const copyNoteContent = async (note) => {
     try {
@@ -139,20 +175,30 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, ca
       </section>
       <section className="notes-section">
         <div className="section-toolbar">
-          <div><span className="eyebrow">TABLICA GRUPY</span><h2>Ostatnie notatki <span className="count-badge">{visibleNotes.length}</span></h2></div>
+          <div><span className="eyebrow">TABLICA GRUPY</span><h2>{NOTE_FOLDERS.find((folder) => folder.id === selectedFolder).label} <span className="count-badge">{visibleNotes.length}</span></h2></div>
           <label className="search-box"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Szukaj w notatkach" /><kbd>⌘ K</kbd></label>
         </div>
+        <div className="note-folders" aria-label="Foldery notatek">
+          {NOTE_FOLDERS.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" className={`note-folder ${selectedFolder === id ? 'note-folder-active' : ''}`} aria-pressed={selectedFolder === id} onClick={() => setSelectedFolder(id)}>
+              <Icon size={18} /><span>{label}</span><span className="folder-count">{notes.filter((note) => noteFolderId(note) === id).length}</span>
+            </button>
+          ))}
+        </div>
         {loading ? <div className="empty-state"><LoaderCircle className="spin" size={23} /><p>Ładuję notatki...</p></div> : visibleNotes.length === 0 ? (
-          <div className="empty-state"><FolderOpen size={26} /><strong>Tu zrobiło się cicho.</strong><p>Dodaj pierwszą notatkę albo zmień kryteria wyszukiwania.</p><button className="text-button" onClick={onNew}>Dodaj notatkę <ArrowRight size={15} /></button></div>
+          <div className="empty-state"><FolderOpen size={26} /><strong>Ten folder jest pusty.</strong><p>Dodaj notatkę albo zmień kryteria wyszukiwania.</p><button className="text-button" onClick={() => onNew(NOTE_FOLDERS.find((folder) => folder.id === selectedFolder).subject)}>Dodaj notatkę <ArrowRight size={15} /></button></div>
         ) : (
-          <div className="notes-list">{visibleNotes.map((note, index) => <article className="note-row" key={note.id}>
-            <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
-            <div className="note-main"><div className="note-meta"><span className="note-date">{dateLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><h3>{note.title}</h3><p>{note.content}</p>
-              {copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
-              {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
-            </div>
-            {canDelete(note) && <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>}
-          </article>)}</div>
+          <div className="note-groups">{dateGroups.map((group) => <section className="date-group" key={dateGroupKey(group.date)}>
+            <h3 className="date-group-heading">{dateGroupLabel(group.date)}</h3>
+            <div className="notes-list">{group.notes.map((note, index) => <article className="note-row" key={note.id}>
+              <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
+              <div className="note-main"><div className="note-meta"><span className="note-date">{timeLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><h3>{note.title}</h3><p>{note.content}</p>
+                {copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
+                {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
+              </div>
+              {canDelete(note) && <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>}
+            </article>)}</div>
+          </section>)}</div>
         )}
       </section>
     </>
@@ -400,7 +446,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState({ title: '', content: '', files: [] });
+  const [draft, setDraft] = useState({ title: '', content: '', subject: NOTE_FOLDERS[1].subject, files: [] });
   const [notice, setNotice] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -454,8 +500,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
-  const openComposer = (content = '') => {
-    setDraft({ title: '', content, files: [] });
+  const openComposer = (content = '', subject = NOTE_FOLDERS[1].subject) => {
+    setDraft({ title: '', content, subject, files: [] });
     setComposerOpen(true);
   };
 
@@ -474,7 +520,7 @@ export default function App() {
         }
       }
       const payload = {
-        title: draft.title.trim(), content: draft.content.trim(), attachments,
+        title: draft.title.trim(), content: draft.content.trim(), subject: draft.subject, attachments,
       };
       if (supabase) {
         const { data, error: insertError } = await supabase.from('notes').insert({ ...payload, author_id: user?.id || null }).select().single();
@@ -541,7 +587,7 @@ export default function App() {
         <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Szpontownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
         <div className="content-wrap">
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
-          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={() => openComposer()} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
+          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={(subject) => openComposer('', subject)} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
           {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
           <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>

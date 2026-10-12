@@ -2,6 +2,8 @@
 
 Lekka aplikacja dla grupy uczącej się zawodu. Każdy może przeglądać i dodawać notatki bez konta. Tylko administrator loguje się, aby usuwać wpisy. Zdjęcia są czytane po polsku lokalnie w przeglądarce, a generator kodu korzysta z Gemini przez prywatny endpoint serwera.
 
+Notatki są dostępne w dwóch folderach: „Bazy danych” oraz „Aplikacje / strony internetowe”. W każdym folderze wpisy są grupowane według daty. Podczas dodawania notatki można wybrać folder; starsze wpisy bez przypisanego folderu pozostają widoczne, a wpisy dotyczące baz danych są rozpoznawane po treści.
+
 ## Uruchomienie lokalne
 
 ```bash
