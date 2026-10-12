@@ -14,8 +14,8 @@ const NOTE_FOLDERS = [
 ];
 
 const easterEggPhotos = [
-  'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=1200&q=85',
-  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=85',
+  { href: 'image.png', alt: 'Easter Egg Photo 1' },
+  { href: 'krzys.gif', alt: 'Easter Egg Photo 2' },
 ];
 
 const demoNotes = [
