@@ -95,7 +95,7 @@ function AuthDialog({ onClose, onSignedIn }) {
         <div className="dialog-mark"><KeyRound size={19} /></div>
         <span className="eyebrow">DOSTĘP ADMINISTRATORA</span>
         <h2 id="auth-title">Panel administratora</h2>
-        <p className="dialog-copy">Logowanie jest potrzebne tylko do usuwania wpisów. Notatki możesz przeglądać i dodawać bez konta.</p>
+        <p className="dialog-copy">Logowanie jest potrzebne do moderowania wpisów i zmiany ich folderów. Notatki możesz przeglądać i dodawać bez konta.</p>
         <p className="dialog-copy">WŁASNOŚĆ SZEREGOWY LEONIDAS</p>
         {!hasSupabaseConfig ? (
           <div className="inline-message"><AlertCircle size={17} /><span>Tryb podglądu działa lokalnie. Logowanie włączysz po konfiguracji Supabase opisanej w README.</span></div>
@@ -139,8 +139,9 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
   );
 }
 
-function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, canDelete, loading }) {
+function NotesPage({ notes, search, setSearch, onNew, onDelete, onMove, onAttachment, canDelete, loading }) {
   const [copyStatus, setCopyStatus] = useState(null);
+  const [movingNoteId, setMovingNoteId] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState('websites');
   const visibleNotes = useMemo(() => notes.filter((note) => {
     const query = search.trim().toLowerCase();
@@ -163,6 +164,15 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, ca
       setCopyStatus({ id: note.id, message: 'Treść skopiowana.' });
     } catch {
       setCopyStatus({ id: note.id, message: 'Nie udało się skopiować treści.' });
+    }
+  };
+
+  const moveNote = async (note, subject) => {
+    setMovingNoteId(note.id);
+    try {
+      await onMove(note, subject);
+    } finally {
+      setMovingNoteId(null);
     }
   };
 
@@ -196,7 +206,21 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, ca
                 {copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
                 {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
               </div>
-              {canDelete(note) && <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>}
+              {canDelete(note) && <div className="note-admin-actions">
+                <label className="note-folder-select-label" aria-label={`Zmień folder notatki: ${note.title}`}>
+                  <FolderOpen size={15} />
+                  <select
+                    className="note-folder-select"
+                    aria-label={`Folder notatki ${note.title}`}
+                    value={NOTE_FOLDERS.find((folder) => folder.id === noteFolderId(note)).subject}
+                    disabled={movingNoteId === note.id}
+                    onChange={(event) => moveNote(note, event.target.value)}
+                  >
+                    {NOTE_FOLDERS.map((folder) => <option key={folder.id} value={folder.subject}>{folder.label}</option>)}
+                  </select>
+                </label>
+                <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>
+              </div>}
             </article>)}</div>
           </section>)}</div>
         )}
@@ -308,6 +332,7 @@ function CodePage({ onUseCode }) {
   const [prompt, setPrompt] = useState('');
   const [code, setCode] = useState('');
   const [explanation, setExplanation] = useState('');
+  const [downloadableFiles, setDownloadableFiles] = useState([]);
   const [lessonNotes, setLessonNotes] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [attachmentError, setAttachmentError] = useState('');
@@ -338,6 +363,24 @@ function CodePage({ onUseCode }) {
     const link = document.createElement('a');
     link.href = url;
     link.download = `szpontownia-kod.${fileExtension === 'mysql' ? 'sql' : fileExtension}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadHtmlFile = (file, index) => {
+    const fileTitle = file.title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'zadanie';
+    const blob = new Blob([file.content], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `zadanie-${String(index + 1).padStart(2, '0')}-${fileTitle}.html`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -384,6 +427,7 @@ function CodePage({ onUseCode }) {
       if (!response.ok) throw new Error(result.error || 'Nie udało się wygenerować kodu.');
       setCode(result.code);
       setExplanation(result.explanation);
+      setDownloadableFiles(result.files || []);
     } catch (generationError) {
       setError(generationError.message || 'Serwer generatora jest niedostępny.');
     } finally {
@@ -426,6 +470,9 @@ function CodePage({ onUseCode }) {
           {code ? <div className="generated-result">
             <section className="generated-code"><div className="generated-section-heading"><h3>Czysty kod</h3><div className="generated-actions"><button className="button button-quiet button-small" onClick={copyCode}><Copy size={14} />Kopiuj</button><button className="button button-quiet button-small" onClick={downloadCode}><Download size={14} />Pobierz .{fileExtension}</button></div></div><pre><code>{code}</code></pre></section>
             <section className="generated-explanation"><h3>Wyjaśnienie</h3><p>{explanation}</p></section>
+            {downloadableFiles.length > 0 && <section className="generated-files"><h3>Pliki HTML do pobrania</h3><div className="generated-files-list">
+              {downloadableFiles.map((file, index) => <button type="button" className="button button-quiet button-small" key={`${index}-${file.title}`} onClick={() => downloadHtmlFile(file, index)}><Download size={14} />{file.title} (.html)</button>)}
+            </div></section>}
             <button className="button button-primary" onClick={() => onUseCode(code)}><Plus size={16} />Zapisz kod w notatkach</button>
             {copyNotice && <p className="progress-caption" role="status">{copyNotice}</p>}
           </div> : <div className="code-empty"><Code2 size={23} /><p>Wygenerowany kod i wyjaśnienie pojawią się tutaj.</p></div>}
@@ -552,6 +599,29 @@ export default function App() {
     setNotice('Notatka usunięta.');
   };
 
+  const moveNote = async (note, subject) => {
+    if (!NOTE_FOLDERS.some((folder) => folder.subject === subject)) {
+      setNotice('Wybrany folder jest nieprawidłowy.');
+      return;
+    }
+    if (supabase) {
+      const { data, error: updateError } = await supabase
+        .from('notes')
+        .update({ subject })
+        .eq('id', note.id)
+        .select()
+        .single();
+      if (updateError) {
+        setNotice(`Nie udało się przenieść notatki: ${updateError.message}`);
+        return;
+      }
+      setNotes((current) => current.map((item) => item.id === note.id ? data : item));
+    } else {
+      setNotes((current) => current.map((item) => item.id === note.id ? { ...item, subject } : item));
+    }
+    setNotice(`Notatka przeniesiona do folderu „${NOTE_FOLDERS.find((folder) => folder.subject === subject).label}”.`);
+  };
+
   const openAttachment = async (file) => {
     if (!supabase) return;
     const { data, error: urlError } = await supabase.storage.from('note-files').createSignedUrl(file.path, 60);
@@ -587,7 +657,7 @@ export default function App() {
         <header className="topbar"><button className="icon-button mobile-menu" aria-label="Otwórz menu" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button><div className="breadcrumb">Szpontownia <span>/</span> <strong>{navItems.find((item) => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`sync-status ${hasSupabaseConfig ? 'sync-live' : ''}`}><span />{hasSupabaseConfig ? 'Tablica publiczna' : 'Tryb lokalny'}</span>{!user && <button className="button button-small button-outline" onClick={() => setAuthOpen(true)}><ShieldCheck size={15} />Panel admina</button>}</div></header>
         <div className="content-wrap">
           {!hasSupabaseConfig && <div className="demo-banner"><span><Sparkles size={16} />Oglądasz przykładowe notatki. Skonfiguruj Supabase, żeby udostępniać własne wpisy całej grupie.</span><a href="README.md">Konfiguracja <ArrowRight size={14} /></a></div>}
-          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={(subject) => openComposer('', subject)} onDelete={deleteNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
+          {page === 'notes' && <NotesPage notes={notes} search={search} setSearch={setSearch} onNew={(subject) => openComposer('', subject)} onDelete={deleteNote} onMove={moveNote} onAttachment={openAttachment} canDelete={canDelete} loading={loading} />}
           {page === 'ocr' && <OcrPage onUseText={(text) => { openComposer(text); setPage('notes'); }} />}
           {page === 'code' && <CodePage onUseCode={(code) => { openComposer(code); setPage('notes'); }} />}
           <footer className="app-footer"><span>Szpontownia <b>·</b> wiedza, którą dzielimy się dalej</span><span>Ucz się po swojemu.</span></footer>
