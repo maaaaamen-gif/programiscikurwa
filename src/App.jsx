@@ -58,6 +58,18 @@ const dateGroupLabel = (value) => new Intl.DateTimeFormat('pl-PL', {
   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
 }).format(new Date(value));
 
+const decodePlainText = (buffer) => {
+  const bytes = new Uint8Array(buffer);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes);
+
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1250').decode(bytes);
+  }
+};
+
 const noteFolderId = (note) => {
   const subject = (note.subject || '').toLocaleLowerCase('pl-PL');
   if (subject.includes('bazy danych')) return 'database';
@@ -674,9 +686,34 @@ export default function App() {
 
   const openAttachment = async (file) => {
     if (!supabase) return;
-    const { data, error: urlError } = await supabase.storage.from('note-files').createSignedUrl(file.path, 60);
-    if (urlError) { setNotice(urlError.message); return; }
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const openedWindow = window.open('', '_blank');
+    if (!openedWindow) {
+      setNotice('Przeglądarka zablokowała otwarcie pliku. Zezwól na wyskakujące okna i spróbuj ponownie.');
+      return;
+    }
+    openedWindow.opener = null;
+
+    try {
+      const { data, error: urlError } = await supabase.storage.from('note-files').createSignedUrl(file.path, 60);
+      if (urlError) throw urlError;
+
+      if (file.type === 'text/plain' || /\.txt$/i.test(file.name)) {
+        const response = await fetch(data.signedUrl);
+        if (!response.ok) throw new Error('Nie udało się pobrać załącznika.');
+        const text = decodePlainText(await response.arrayBuffer());
+        const document = openedWindow.document;
+        document.open();
+        document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title></title><style>body{margin:0;padding:24px;background:#111820;color:#e7edf1;font:14px/1.6 ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><pre></pre></body></html>');
+        document.close();
+        document.title = file.name;
+        document.querySelector('pre').textContent = text;
+      } else {
+        openedWindow.location.href = data.signedUrl;
+      }
+    } catch (attachmentError) {
+      openedWindow.close();
+      setNotice(attachmentError.message || 'Nie udało się otworzyć załącznika.');
+    }
   };
 
   const signOut = async () => {
