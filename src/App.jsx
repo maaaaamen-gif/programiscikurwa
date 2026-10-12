@@ -98,10 +98,8 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
           <button className="icon-button" onClick={onClose} aria-label="Zamknij"><X size={18} /></button>
         </div>
         <form className="form-stack" onSubmit={onSave}>
-          <label>Tytuł<input required autoFocus maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Na przykład: Rodzaje połączeń lutowanych" /></label>
-          <label>Podpis (opcjonalnie)<input maxLength={60} value={draft.author_name} onChange={(event) => setDraft({ ...draft, author_name: event.target.value })} placeholder="Na przykład: Kacper" /></label>
-          <label>Przedmiot<input list="subjects" maxLength={60} value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} placeholder="Wpisz przedmiot" /><datalist id="subjects"><option>Elektrotechnika</option><option>Sieci komputerowe</option><option>Podstawy konstrukcji maszyn</option><option>Programowanie</option></datalist></label>
-          <label>Treść<textarea required rows={8} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Zapisz to, co warto zapamiętać..." /></label>
+          <label>Tytuł<input required autoFocus maxLength={120} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Na przykład: Formularz logowania w HTML" /></label>
+          <label>Kod lub treść<textarea required rows={12} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Wklej kod lub wpisz treść notatki..." /></label>
           <label className={`file-picker ${!canUpload ? 'file-picker-disabled' : ''}`}>
             <Upload size={17} /><span><strong>Dołącz pliki</strong><small>{canUpload ? 'Zdjęcia, PDF i dokumenty do 20 MB' : 'Dostępne po podłączeniu bazy danych'}</small></span>
             <input type="file" multiple disabled={!canUpload} onChange={(event) => setDraft({ ...draft, files: [...draft.files, ...Array.from(event.target.files || [])] })} />
@@ -115,13 +113,10 @@ function NoteDialog({ draft, setDraft, onClose, onSave, saving, canUpload }) {
 }
 
 function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, canDelete, loading }) {
-  const [subject, setSubject] = useState('Wszystkie');
-  const subjects = useMemo(() => ['Wszystkie', ...new Set(notes.map((note) => note.subject).filter(Boolean))], [notes]);
   const visibleNotes = useMemo(() => notes.filter((note) => {
     const query = search.trim().toLowerCase();
-    const matchesQuery = !query || `${note.title} ${note.content} ${note.subject} ${note.author_name}`.toLowerCase().includes(query);
-    return matchesQuery && (subject === 'Wszystkie' || note.subject === subject);
-  }), [notes, search, subject]);
+    return !query || `${note.title} ${note.content}`.toLowerCase().includes(query);
+  }), [notes, search]);
 
   return (
     <>
@@ -135,17 +130,13 @@ function NotesPage({ notes, search, setSearch, onNew, onDelete, onAttachment, ca
           <div><span className="eyebrow">TABLICA GRUPY</span><h2>Ostatnie notatki <span className="count-badge">{visibleNotes.length}</span></h2></div>
           <label className="search-box"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Szukaj w notatkach" /><kbd>⌘ K</kbd></label>
         </div>
-        <div className="subject-tabs" role="tablist" aria-label="Filtruj przedmiot">
-          {subjects.map((item) => <button key={item} role="tab" aria-selected={subject === item} className={subject === item ? 'subject-tab active' : 'subject-tab'} onClick={() => setSubject(item)}>{item}</button>)}
-        </div>
         {loading ? <div className="empty-state"><LoaderCircle className="spin" size={23} /><p>Ładuję notatki...</p></div> : visibleNotes.length === 0 ? (
           <div className="empty-state"><FolderOpen size={26} /><strong>Tu zrobiło się cicho.</strong><p>Dodaj pierwszą notatkę albo zmień kryteria wyszukiwania.</p><button className="text-button" onClick={onNew}>Dodaj notatkę <ArrowRight size={15} /></button></div>
         ) : (
           <div className="notes-list">{visibleNotes.map((note, index) => <article className="note-row" key={note.id}>
             <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
-            <div className="note-main"><div className="note-meta"><span className="subject-label">{note.subject || 'Ogólne'}</span><span className="note-date">{dateLabel(note.created_at)}</span></div><h3>{note.title}</h3><p>{note.content}</p>
+            <div className="note-main"><div className="note-meta"><span className="note-date">{dateLabel(note.created_at)}</span></div><h3>{note.title}</h3><p>{note.content}</p>
               {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <button key={file.path} className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} />{file.name}<ArrowDownToLine size={13} /></button>)}</div>}
-              <span className="note-author"><span className="avatar-dot">{(note.author_name || '?').slice(0, 1).toUpperCase()}</span>{note.author_name || 'Uczeń'}</span>
             </div>
             {canDelete(note) && <button className="icon-button delete-button" onClick={() => onDelete(note)} aria-label={`Usuń notatkę: ${note.title}`} title="Usuń notatkę"><Trash2 size={16} /></button>}
           </article>)}</div>
@@ -259,7 +250,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState({ title: '', subject: '', content: '', files: [] });
+  const [draft, setDraft] = useState({ title: '', content: '', files: [] });
   const [notice, setNotice] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -314,7 +305,7 @@ export default function App() {
   }, []);
 
   const openComposer = (content = '') => {
-    setDraft({ title: '', subject: '', content, author_name: '', files: [] });
+    setDraft({ title: '', content, files: [] });
     setComposerOpen(true);
   };
 
@@ -333,8 +324,7 @@ export default function App() {
         }
       }
       const payload = {
-        title: draft.title.trim(), subject: draft.subject.trim() || 'Ogólne', content: draft.content.trim(), attachments,
-        author_name: draft.author_name.trim() || user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'Gość',
+        title: draft.title.trim(), content: draft.content.trim(), attachments,
       };
       if (supabase) {
         const { data, error: insertError } = await supabase.from('notes').insert({ ...payload, author_id: user?.id || null }).select().single();
