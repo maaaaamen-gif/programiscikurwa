@@ -72,6 +72,8 @@ const decodePlainText = (buffer) => {
   }
 };
 
+const isPlainTextAttachment = (file) => /\.txt$/i.test(file.name);
+
 const noteFolderId = (note) => {
   const subject = (note.subject || '').toLocaleLowerCase('pl-PL');
   if (subject.includes('bazy danych')) return 'database';
@@ -270,7 +272,12 @@ function NotesPage({ notes, search, setSearch, onNew, onEdit, onDelete, onMove, 
               <span className={`note-index tone-${index % 4}`}>{String(index + 1).padStart(2, '0')}</span>
               <div className="note-main"><div className="note-meta"><span className="note-date">{timeLabel(note.created_at)}</span><button className="copy-note-button" disabled={!note.content} onClick={() => copyNoteContent(note)}><Copy size={13} />{copyStatus?.id === note.id && copyStatus.message === 'Treść skopiowana.' ? 'Skopiowano' : 'Kopiuj treść'}</button></div><button type="button" className="note-expand-button" aria-expanded={isExpanded} onClick={() => toggleNote(note.id)}><h3>{note.title}</h3><ChevronDown size={17} /></button><p className={isExpanded ? 'note-content-expanded' : 'note-content-collapsed'}>{note.content}</p>
                 {isExpanded && copyStatus?.id === note.id && <span className="copy-note-status" role="status">{copyStatus.message}</span>}
-                {isExpanded && note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <div key={file.path} className="attachment-item"><button type="button" className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} /><span>{file.name}</span></button><button type="button" className="attachment-download" onClick={() => onDownload(file)} aria-label={`Pobierz ${file.name}`} title={`Pobierz ${file.name}`}><Download size={15} /><span>Pobierz</span></button></div>)}</div>}
+                {note.attachments?.length > 0 && <div className="attachment-list">{note.attachments.map((file) => <div key={file.path} className="attachment-item">
+                  {isPlainTextAttachment(file)
+                    ? <button type="button" className="attachment-link" onClick={() => onAttachment(file)}><FileText size={14} /><span>{file.name}</span></button>
+                    : <span className="attachment-name"><FileText size={14} /><span>{file.name}</span></span>}
+                  <button type="button" className="attachment-download" onClick={() => onDownload(file)} aria-label={`Pobierz ${file.name}`} title={`Pobierz ${file.name}`}><Download size={15} /><span>Pobierz</span></button>
+                </div>)}</div>}
               </div>
               {canManage(note) && <div className="note-admin-actions">
                 <label className="note-folder-select-label" aria-label={`Zmień folder notatki: ${note.title}`}>
@@ -790,6 +797,11 @@ export default function App() {
 
   const openAttachment = async (file) => {
     if (!supabase) return;
+    if (!isPlainTextAttachment(file)) {
+      setNotice('Ten typ pliku można tylko pobrać.');
+      return;
+    }
+
     const openedWindow = window.open('', '_blank');
     if (!openedWindow) {
       setNotice('Przeglądarka zablokowała otwarcie pliku. Zezwól na wyskakujące okna i spróbuj ponownie.');
@@ -801,19 +813,15 @@ export default function App() {
       const { data, error: urlError } = await supabase.storage.from('note-files').createSignedUrl(file.path, 60);
       if (urlError) throw urlError;
 
-      if (file.type === 'text/plain' || /\.txt$/i.test(file.name)) {
-        const response = await fetch(data.signedUrl);
-        if (!response.ok) throw new Error('Nie udało się pobrać załącznika.');
-        const text = decodePlainText(await response.arrayBuffer());
-        const document = openedWindow.document;
-        document.open();
-        document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title></title><style>body{margin:0;padding:24px;background:#111820;color:#e7edf1;font:14px/1.6 ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><pre></pre></body></html>');
-        document.close();
-        document.title = file.name;
-        document.querySelector('pre').textContent = text;
-      } else {
-        openedWindow.location.href = data.signedUrl;
-      }
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error('Nie udało się pobrać załącznika.');
+      const text = decodePlainText(await response.arrayBuffer());
+      const document = openedWindow.document;
+      document.open();
+      document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title></title><style>body{margin:0;padding:24px;background:#111820;color:#e7edf1;font:14px/1.6 ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><pre></pre></body></html>');
+      document.close();
+      document.title = file.name;
+      document.querySelector('pre').textContent = text;
     } catch (attachmentError) {
       openedWindow.close();
       setNotice(attachmentError.message || 'Nie udało się otworzyć załącznika.');
